@@ -3,8 +3,8 @@ use ieee.std_logic_1164.all;
 
 -- Parallel in, serial out (SIPO) shift register
 -- Shifts downwards/rightwards on the rising edge of `clock` when `shift_enable`
--- is high.
-entity sipo_register is
+-- is high. The value shifted into the MSB is decided by `shift_in`.
+entity piso_register is
     generic(data_width: integer);
     port (
         clock: in std_ulogic;
@@ -12,13 +12,14 @@ entity sipo_register is
 
         write_enable: in std_ulogic;
         shift_enable: in std_ulogic;
+        shift_in: in std_ulogic;
 
         data_in: in std_ulogic_vector((data_width - 1) downto 0);
         data_out: out std_ulogic
     );
 end entity;
 
-architecture rtl of sipo_register is
+architecture rtl of piso_register is
     signal data: std_ulogic_vector((data_width - 1) downto 0);
 begin
     data_out <= data(0);
@@ -34,7 +35,7 @@ begin
                 for i in 0 to (data_width - 2) loop
                     data(i) <= data(i + 1);
                 end loop;
-                data(data_width - 1) <= '0';
+                data(data_width - 1) <= shift_in;
             end if;
         end if;
     end process;
