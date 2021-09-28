@@ -14,6 +14,6 @@ architecture struct of tristate_buffer is
 begin
     with enable select data_out <=
         std_logic_vector(data_in) when '1',
-        (others => 'Z') when '0',
-        (others => 'X') when others;
+        (others => 'Z')           when '0',
+        (others => 'X')           when others;
 end architecture;

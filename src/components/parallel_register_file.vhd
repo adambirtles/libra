@@ -21,33 +21,34 @@ architecture rtl of parallel_register_file is
     type std_ulogic_vector_vector is array(integer range <>) of std_ulogic_vector((data_width - 1) downto 0);
 
     signal reg_outs: std_ulogic_vector_vector(0 to 15);
-    signal write_enabled: std_ulogic_vector(0 to 15);
-    signal x_selected: std_ulogic_vector(0 to 15);
-    signal y_selected: std_ulogic_vector(0 to 15);
+    signal reg_write_enables: std_ulogic_vector(0 to 15);
+
+    signal selected_x: std_ulogic_vector(0 to 15);
+    signal selected_y: std_ulogic_vector(0 to 15);
 begin
     x_decoder: entity work.binary_decoder(struct)
         generic map(binary_width => 4)
         port map(
             binary => x_select,
-            decoded => x_selected
+            decoded => selected_x
         );
 
     y_decoder: entity work.binary_decoder(struct)
         generic map(binary_width => 4)
         port map(
             binary => y_select,
-            decoded => y_selected
+            decoded => selected_y
         );
 
     gen_regs: for r in 0 to 15 generate
-        write_enabled(r) <= x_write_enable and x_selected(r);
+        reg_write_enables(r) <= x_write_enable and selected_x(r);
 
         reg: entity work.parallel_register(rtl)
             generic map(data_width => data_width)
             port map(
                 clock => clock,
                 n_reset => n_reset,
-                write_enable => write_enabled(r),
+                write_enable => reg_write_enables(r),
                 data_in => x_in,
                 data_out => reg_outs(r)
             );
@@ -55,7 +56,7 @@ begin
         x_buf: entity work.tristate_buffer(struct)
             generic map(data_width => data_width)
             port map(
-                enable => x_selected(r),
+                enable => selected_x(r),
                 data_in => reg_outs(r),
                 data_out => x_out
             );
@@ -63,7 +64,7 @@ begin
         y_buf: entity work.tristate_buffer(struct)
             generic map(data_width => data_width)
             port map(
-                enable => y_selected(r),
+                enable => selected_y(r),
                 data_in => reg_outs(r),
                 data_out => y_out
             );
