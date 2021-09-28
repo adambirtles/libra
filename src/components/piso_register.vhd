@@ -26,10 +26,8 @@ begin
 
     process(clock)
     begin
-        if rising_edge(clock) then
-            if n_reset = '0' then
-                data <= (others => '0');
-            elsif write_enable = '1' then
+        if rising_edge(clock) and n_reset /= '0' then
+            if write_enable = '1' then
                 data <= data_in;
             elsif shift_enable = '1' then
                 for i in 0 to (data_width - 2) loop
@@ -37,6 +35,13 @@ begin
                 end loop;
                 data(data_width - 1) <= shift_in;
             end if;
+        end if;
+    end process;
+
+    process(n_reset)
+    begin
+        if n_reset = '0' then
+            data <= (others => '0');
         end if;
     end process;
 end architecture;
