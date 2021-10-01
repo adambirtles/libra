@@ -18,9 +18,9 @@ entity parallel_register_file is
 end entity;
 
 architecture rtl of parallel_register_file is
-    type std_ulogic_vector_vector is array(integer range <>) of std_ulogic_vector((data_width - 1) downto 0);
+    type data_vector is array(integer range <>) of std_ulogic_vector((data_width - 1) downto 0);
 
-    signal reg_outs: std_ulogic_vector_vector(0 to 15);
+    signal reg_outs: data_vector(0 to 15);
     signal reg_write_enables: std_ulogic_vector(0 to 15);
 
     signal selected_x: std_ulogic_vector(0 to 15);
