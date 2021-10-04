@@ -9,12 +9,20 @@ entity cpu_parallel is
         mem_read: in std_ulogic_vector(7 downto 0);
         mem_write: out std_ulogic_vector(7 downto 0);
         mem_addr: out std_ulogic_vector(11 downto 0);
-        mem_write_enable: out std_ulogic
+        mem_write_enable: out std_ulogic;
+
+        halted: out std_ulogic
     );
 end entity;
 
 architecture rtl of cpu_parallel is
-    signal halt_flag: std_ulogic; -- TODO: actually do flags
+    signal halt: std_ulogic;
+    signal carry: std_ulogic;
+    signal zero: std_ulogic;
+
+    signal h_in: std_ulogic;
+    signal c_in: std_ulogic;
+    signal z_in: std_ulogic;
 
     signal operand_rx: std_ulogic_vector(3 downto 0);
     signal operand_ry: std_ulogic_vector(3 downto 0);
@@ -40,6 +48,9 @@ architecture rtl of cpu_parallel is
     signal pg_write_enable: std_ulogic;
     signal irh_write_enable: std_ulogic;
     signal irl_write_enable: std_ulogic;
+    signal h_write_enable: std_ulogic;
+    signal c_write_enable: std_ulogic;
+    signal z_write_enable: std_ulogic;
 
     signal addr_select: std_ulogic;
     signal pc_in_select: std_ulogic;
@@ -64,8 +75,9 @@ begin
             opcode => alu_opcode,
             lhs => rx_out,
             rhs => ry_out,
-            carry_in => '0',
-            result => alu_result
+            carry_in => carry,
+            result => alu_result,
+            carry_out => c_in
         );
 
     -- IR is implemented as two 8-bit registers
@@ -115,6 +127,32 @@ begin
             data_out => pc_increment
         );
 
+    -- Flags
+    halt_flag: entity work.flag(rtl)
+        port map(
+            clock => clock,
+            n_reset => n_reset,
+            write_enable => h_write_enable,
+            data_in => h_in,
+            data_out => halt
+        );
+    carry_flag: entity work.flag(rtl)
+        port map(
+            clock => clock,
+            n_reset => n_reset,
+            write_enable => c_write_enable,
+            data_in => c_in,
+            data_out => carry
+        );
+    zero_flag: entity work.flag(rtl)
+        port map(
+            clock => clock,
+            n_reset => n_reset,
+            write_enable => z_write_enable,
+            data_in => z_in,
+            data_out => zero
+        );
+
     -- Muxes
     mux_addr: with addr_select
     select mem_addr <=
@@ -135,9 +173,12 @@ begin
         ry_out          when "10",
         (others => 'X') when others;
 
+    halted <= halt;
+    mem_write <= rx_out;
+
     process(clock)
     begin
-        if n_reset /= '0' and rising_edge(clock) and halt_flag = '0' then
+        if n_reset /= '0' and rising_edge(clock) and halt = '0' then
             -- TODO: control logic
         end if;
     end process;
