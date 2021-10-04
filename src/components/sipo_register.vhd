@@ -11,7 +11,6 @@ entity sipo_register is
         n_reset: in std_ulogic;
 
         shift_enable: in std_ulogic;
-
         data_in: in std_ulogic;
         data_out: out std_ulogic_vector((data_width - 1) downto 0)
     );
@@ -26,9 +25,7 @@ begin
     begin
         if rising_edge(clock) and n_reset /= '0' then
             if shift_enable = '1' then
-                for i in 0 to (data_width - 2) loop
-                    data(i) <= data(i + 1);
-                end loop;
+                data(0 to (data_width - 2)) <= data(1 to (data_width - 1));
                 data(data_width - 1) <= data_in;
             end if;
         end if;

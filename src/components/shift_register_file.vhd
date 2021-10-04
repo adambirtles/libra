@@ -19,10 +19,10 @@ entity shift_register_file is
 end entity;
 
 architecture rtl of shift_register_file is
-    type std_ulogic_vector_vector is array(integer range <>) of std_ulogic_vector((data_width - 1) downto 0);
+    type data_vector is array(integer range <>) of std_ulogic_vector((data_width - 1) downto 0);
 
     signal reg_ins: std_ulogic_vector(0 to 15);
-    signal reg_outs: std_ulogic_vector_vector(0 to 15);
+    signal reg_outs: data_vector(0 to 15);
     signal reg_shift_enables: std_ulogic_vector(0 to 15);
 
     signal selected_x: std_ulogic_vector(0 to 15);
@@ -45,7 +45,8 @@ begin
     gen_regs: for r in 0 to 15 generate
         reg_shift_enables(r) <= shift_enable and (selected_x(r) or selected_y(r));
 
-        with selected_x(r) select reg_ins(r) <=
+        with selected_x(r)
+        select reg_ins(r) <=
             x_in           when '1',
             reg_outs(r)(0) when '0';
 

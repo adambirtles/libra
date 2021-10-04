@@ -13,7 +13,6 @@ entity piso_register is
         write_enable: in std_ulogic;
         shift_enable: in std_ulogic;
         shift_in: in std_ulogic;
-
         data_in: in std_ulogic_vector((data_width - 1) downto 0);
         data_out: out std_ulogic
     );
@@ -30,9 +29,7 @@ begin
             if write_enable = '1' then
                 data <= data_in;
             elsif shift_enable = '1' then
-                for i in 0 to (data_width - 2) loop
-                    data(i) <= data(i + 1);
-                end loop;
+                data(0 to (data_width - 2)) <= data(1 to (data_width - 1));
                 data(data_width - 1) <= shift_in;
             end if;
         end if;
