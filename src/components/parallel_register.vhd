@@ -15,19 +15,14 @@ end entity;
 
 architecture rtl of parallel_register is
 begin
-    process(clock)
-    begin
-        if rising_edge(clock) and n_reset /= '0' then
-            if write_enable = '1' then
-                data_out <= data_in;
-            end if;
-        end if;
-    end process;
-
-    process(n_reset)
+    process(clock, n_reset)
     begin
         if n_reset = '0' then
             data_out <= (others => '0');
+        elsif rising_edge(clock) then
+            if write_enable = '1' then
+                data_out <= data_in;
+            end if;
         end if;
     end process;
 end architecture;

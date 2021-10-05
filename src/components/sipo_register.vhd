@@ -21,20 +21,15 @@ architecture rtl of sipo_register is
 begin
     data_out <= data;
 
-    process(clock)
+    process(clock, n_reset)
     begin
-        if rising_edge(clock) and n_reset /= '0' then
+        if n_reset = '0' then
+            data <= (others => '0');
+        elsif rising_edge(clock) then
             if shift_enable = '1' then
                 data(0 to (data_width - 2)) <= data(1 to (data_width - 1));
                 data(data_width - 1) <= data_in;
             end if;
-        end if;
-    end process;
-
-    process(n_reset)
-    begin
-        if n_reset = '0' then
-            data <= (others => '0');
         end if;
     end process;
 end architecture;

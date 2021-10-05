@@ -24,6 +24,7 @@ architecture rtl of cpu_parallel is
     signal c_in: std_ulogic;
     signal z_in: std_ulogic;
 
+    signal opcode: std_ulogic_vector(4 downto 0);
     signal operand_rx: std_ulogic_vector(3 downto 0);
     signal operand_ry: std_ulogic_vector(3 downto 0);
     signal operand_index: std_ulogic_vector(6 downto 0);
@@ -42,6 +43,7 @@ architecture rtl of cpu_parallel is
     signal ir_out: std_ulogic_vector(15 downto 0);
     signal pg_out: std_ulogic_vector(4 downto 0);
 
+    -- Control lines
     signal alu_opcode: std_ulogic_vector(2 downto 0);
     signal rx_write_enable: std_ulogic;
     signal pc_write_enable: std_ulogic;
@@ -51,10 +53,29 @@ architecture rtl of cpu_parallel is
     signal h_write_enable: std_ulogic;
     signal c_write_enable: std_ulogic;
     signal z_write_enable: std_ulogic;
-
     signal addr_select: std_ulogic;
     signal pc_in_select: std_ulogic;
     signal rx_in_select: std_ulogic_vector(1 downto 0);
+
+    -- Select constants
+    constant ADDR_SELECT_PC: std_ulogic := '0';
+    constant ADDR_SELECT_INDEXED: std_ulogic := '1';
+
+    constant PC_IN_SELECT_INCREMENT: std_ulogic := '0';
+    constant PC_IN_SELECT_OPERAND: std_ulogic := '1';
+
+    constant RX_IN_SELECT_LOAD: std_ulogic_vector(1 downto 0) := "00";
+    constant RX_IN_SELECT_RESULT: std_ulogic_vector(1 downto 0) := "01";
+    constant RX_IN_SELECT_RY: std_ulogic_vector(1 downto 0) := "10";
+
+    type state_t is (
+        FETCH_HIGH,
+        INC_PC_1,
+        FETCH_LOW,
+        INC_PC_2,
+        DECODE
+    );
+    signal state: state_t;
 begin
     regfile: entity work.parallel_register_file(rtl)
         generic map(data_width => 8)
@@ -153,33 +174,80 @@ begin
             data_out => zero
         );
 
-    -- Muxes
+    -- Mux processes
     mux_addr: with addr_select
     select mem_addr <=
-        pc_out                 when '0',
-        pg_out & operand_index when '1',
+        pc_out                 when ADDR_SELECT_PC,
+        pg_out & operand_index when ADDR_SELECT_INDEXED,
         (others => 'X')        when others;
 
     mux_pc_in: with pc_in_select
     select pc_in <=
-        pc_increment            when '0',
-        operand_immediate & '0' when '1',
+        pc_increment            when PC_IN_SELECT_INCREMENT,
+        operand_immediate & '0' when PC_IN_SELECT_OPERAND,
         (others => 'X')         when others;
 
     mux_rx_in: with rx_in_select
     select rx_in <=
-        mem_read        when "00",
-        alu_result      when "01",
-        ry_out          when "10",
+        mem_read        when RX_IN_SELECT_LOAD,
+        alu_result      when RX_IN_SELECT_RESULT,
+        ry_out          when RX_IN_SELECT_RY,
         (others => 'X') when others;
 
-    halted <= halt;
     mem_write <= rx_out;
+    halted <= halt;
 
-    process(clock)
+    opcode <= ir_out(15 downto 11);
+    operand_rx <= ir_out(10 downto 7);
+    operand_ry <= ir_out(6 downto 3);
+    operand_index <= ir_out(6 downto 0);
+    operand_immediate <= ir_out(10 downto 0);
+
+    process(clock, n_reset)
     begin
-        if n_reset /= '0' and rising_edge(clock) and halt = '0' then
-            -- TODO: control logic
+        -- Reset all control lines
+        alu_opcode <= "000";
+        mem_write_enable <= '0';
+        rx_write_enable <= '0';
+        pc_write_enable <= '0';
+        pg_write_enable <= '0';
+        irh_write_enable <= '0';
+        irl_write_enable <= '0';
+        h_write_enable <= '0';
+        c_write_enable <= '0';
+        z_write_enable <= '0';
+        addr_select <= '0';
+        pc_in_select <= '0';
+        rx_in_select <= "00";
+
+        if n_reset = '0' then
+            state <= FETCH_HIGH;
+        elsif falling_edge(clock) then
+            case state is
+                when FETCH_HIGH =>
+                    irh_write_enable <= '1';
+                    addr_select <= ADDR_SELECT_PC;
+                    state <= INC_PC_1;
+
+                when INC_PC_1 =>
+                    pc_write_enable <= '1';
+                    pc_in_select <= PC_IN_SELECT_INCREMENT;
+                    state <= FETCH_LOW;
+
+                when FETCH_LOW =>
+                    irl_write_enable <= '1';
+                    addr_select <= ADDR_SELECT_PC;
+                    state <= INC_PC_2;
+
+                when INC_PC_2 =>
+                    pc_write_enable <= '1';
+                    pc_in_select <= PC_IN_SELECT_INCREMENT;
+                    state <= DECODE;
+
+                when DECODE =>
+                    -- Figure out opcode and set things accordingly
+                    state <= FETCH_HIGH;
+            end case;
         end if;
     end process;
 end architecture;
