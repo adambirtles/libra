@@ -43,6 +43,9 @@ architecture rtl of cpu_parallel is
     signal ir_out: std_ulogic_vector(15 downto 0);
     signal pg_out: std_ulogic_vector(4 downto 0);
 
+    signal selected_test: std_ulogic;
+    signal test: std_ulogic;
+
     -- Control lines
     signal alu_opcode: std_ulogic_vector(2 downto 0);
     signal rx_write_enable: std_ulogic;
@@ -56,6 +59,8 @@ architecture rtl of cpu_parallel is
     signal addr_select: std_ulogic;
     signal pc_in_select: std_ulogic;
     signal rx_in_select: std_ulogic_vector(1 downto 0);
+    signal test_select: std_ulogic;
+    signal test_invert: std_ulogic;
 
     -- Select constants
     constant ADDR_SELECT_PC: std_ulogic := '0';
@@ -67,6 +72,9 @@ architecture rtl of cpu_parallel is
     constant RX_IN_SELECT_LOAD: std_ulogic_vector(1 downto 0) := "00";
     constant RX_IN_SELECT_RESULT: std_ulogic_vector(1 downto 0) := "01";
     constant RX_IN_SELECT_RY: std_ulogic_vector(1 downto 0) := "10";
+
+    constant TEST_SELECT_ZERO: std_ulogic := '0';
+    constant TEST_SELECT_CARRY: std_ulogic := '1';
 
     type state_t is (
         FETCH_HIGH,
@@ -194,6 +202,14 @@ begin
         ry_out          when RX_IN_SELECT_RY,
         (others => 'X') when others;
 
+    mux_test: with test_select
+    select selected_test <=
+        zero  when TEST_SELECT_ZERO,
+        carry when TEST_SELECT_CARRY,
+        'X'   when others;
+
+    test <= selected_test xor test_invert;
+
     mem_write <= rx_out;
     halted <= halt;
 
@@ -219,6 +235,8 @@ begin
         addr_select <= '0';
         pc_in_select <= '0';
         rx_in_select <= "00";
+        test_select <= '0';
+        test_invert <= '0';
 
         if n_reset = '0' then
             state <= FETCH_HIGH;
