@@ -36,7 +36,7 @@ begin
             n_reset => n_reset,
             mem_read => mem_read,
             mem_write => mem_write,
-            unsigned(mem_addr) => mem_addr,
+            mem_addr => mem_addr,
             mem_write_enable => mem_write_enable,
             halted => halted
         );

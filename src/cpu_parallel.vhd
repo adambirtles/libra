@@ -1,5 +1,8 @@
 library ieee;
 use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+use work.opcodes.all;
 
 entity cpu_parallel is
     port(
@@ -8,7 +11,7 @@ entity cpu_parallel is
 
         mem_read: in std_ulogic_vector(7 downto 0);
         mem_write: out std_ulogic_vector(7 downto 0);
-        mem_addr: out std_ulogic_vector(11 downto 0);
+        mem_addr: out unsigned(11 downto 0);
         mem_write_enable: out std_ulogic;
 
         halted: out std_ulogic
@@ -24,7 +27,7 @@ architecture rtl of cpu_parallel is
     signal c_in: std_ulogic;
     signal z_in: std_ulogic;
 
-    signal opcode: std_ulogic_vector(4 downto 0);
+    signal opcode: cpu_opcode;
     signal operand_rx: std_ulogic_vector(3 downto 0);
     signal operand_ry: std_ulogic_vector(3 downto 0);
     signal operand_index: std_ulogic_vector(6 downto 0);
@@ -35,10 +38,10 @@ architecture rtl of cpu_parallel is
     signal ry_out: std_ulogic_vector(7 downto 0);
     signal alu_result: std_ulogic_vector(7 downto 0);
 
-    signal pc_in: std_ulogic_vector(11 downto 0);
-    signal pc_out: std_ulogic_vector(11 downto 0);
-    signal pc_increment: std_ulogic_vector(11 downto 0);
-    signal indexed_addr: std_ulogic_vector(11 downto 0);
+    signal pc_in: unsigned(11 downto 0);
+    signal pc_out: unsigned(11 downto 0);
+    signal pc_increment: unsigned(11 downto 0);
+    signal indexed_addr: unsigned(11 downto 0);
 
     signal ir_out: std_ulogic_vector(15 downto 0);
     signal pg_out: std_ulogic_vector(4 downto 0);
@@ -47,7 +50,6 @@ architecture rtl of cpu_parallel is
     signal test: std_ulogic;
 
     -- Control lines
-    signal alu_opcode: std_ulogic_vector(2 downto 0);
     signal rx_write_enable: std_ulogic;
     signal pc_write_enable: std_ulogic;
     signal pg_write_enable: std_ulogic;
@@ -59,8 +61,6 @@ architecture rtl of cpu_parallel is
     signal addr_select: std_ulogic;
     signal pc_in_select: std_ulogic;
     signal rx_in_select: std_ulogic_vector(1 downto 0);
-    signal test_select: std_ulogic;
-    signal test_invert: std_ulogic;
 
     -- Select constants
     constant ADDR_SELECT_PC: std_ulogic := '0';
@@ -77,11 +77,32 @@ architecture rtl of cpu_parallel is
     constant TEST_SELECT_CARRY: std_ulogic := '1';
 
     type state_t is (
+        -- Fetch
         FETCH_HIGH,
         INC_PC_1,
         FETCH_LOW,
         INC_PC_2,
-        DECODE
+
+        -- Decode
+        DECODE,
+
+        -- Execute
+        EXECUTE_NOP,
+        EXECUTE_HALT,
+        EXECUTE_COPY,
+        EXECUTE_LOAD,
+        EXECUTE_STORE,
+        EXECUTE_SET_PAGE,
+        EXECUTE_JUMP,
+        EXECUTE_TEST,
+        EXECUTE_SHIFT_L,
+        EXECUTE_SHIFT_R,
+        EXECUTE_CLEAR_CARRY,
+        EXECUTE_ALU_OP,
+        EXECUTE_END,
+
+        -- Error
+        ERROR
     );
     signal state: state_t;
 begin
@@ -101,7 +122,7 @@ begin
     alu: entity work.alu(struct)
         generic map(data_width => 8)
         port map(
-            opcode => alu_opcode,
+            opcode => opcode(2 downto 0),
             lhs => rx_out,
             rhs => ry_out,
             carry_in => carry,
@@ -145,8 +166,8 @@ begin
             clock => clock,
             n_reset => n_reset,
             write_enable => pc_write_enable,
-            data_in => pc_in,
-            data_out => pc_out
+            data_in => std_ulogic_vector(pc_in),
+            unsigned(data_out) => pc_out
         );
 
     pc_inc: entity work.incrementer(struct)
@@ -185,15 +206,15 @@ begin
     -- Mux processes
     mux_addr: with addr_select
     select mem_addr <=
-        pc_out                 when ADDR_SELECT_PC,
-        pg_out & operand_index when ADDR_SELECT_INDEXED,
-        (others => 'X')        when others;
+        pc_out                           when ADDR_SELECT_PC,
+        unsigned(pg_out & operand_index) when ADDR_SELECT_INDEXED,
+        (others => 'X')                  when others;
 
     mux_pc_in: with pc_in_select
     select pc_in <=
-        pc_increment            when PC_IN_SELECT_INCREMENT,
-        operand_immediate & '0' when PC_IN_SELECT_OPERAND,
-        (others => 'X')         when others;
+        pc_increment                      when PC_IN_SELECT_INCREMENT,
+        unsigned(operand_immediate & '0') when PC_IN_SELECT_OPERAND,
+        (others => 'X')                   when others;
 
     mux_rx_in: with rx_in_select
     select rx_in <=
@@ -202,13 +223,15 @@ begin
         ry_out          when RX_IN_SELECT_RY,
         (others => 'X') when others;
 
-    mux_test: with test_select
+    mux_test: with opcode(0)
     select selected_test <=
         zero  when TEST_SELECT_ZERO,
         carry when TEST_SELECT_CARRY,
         'X'   when others;
 
-    test <= selected_test xor test_invert;
+    test <= selected_test xor opcode(1);
+
+    z_in <= '1' when alu_result = "00000000" else '0';
 
     mem_write <= rx_out;
     halted <= halt;
@@ -220,51 +243,147 @@ begin
     operand_immediate <= ir_out(10 downto 0);
 
     process(clock, n_reset)
+        procedure reset_controls is
+        begin
+            mem_write_enable <= '0';
+            rx_write_enable <= '0';
+            pc_write_enable <= '0';
+            pg_write_enable <= '0';
+            irh_write_enable <= '0';
+            irl_write_enable <= '0';
+            h_write_enable <= '0';
+            c_write_enable <= '0';
+            z_write_enable <= '0';
+            addr_select <= '0';
+            pc_in_select <= '0';
+            rx_in_select <= "00";
+        end procedure;
     begin
-        -- Reset all control lines
-        alu_opcode <= "000";
-        mem_write_enable <= '0';
-        rx_write_enable <= '0';
-        pc_write_enable <= '0';
-        pg_write_enable <= '0';
-        irh_write_enable <= '0';
-        irl_write_enable <= '0';
-        h_write_enable <= '0';
-        c_write_enable <= '0';
-        z_write_enable <= '0';
-        addr_select <= '0';
-        pc_in_select <= '0';
-        rx_in_select <= "00";
-        test_select <= '0';
-        test_invert <= '0';
-
         if n_reset = '0' then
+            reset_controls;
             state <= FETCH_HIGH;
         elsif falling_edge(clock) then
             case state is
                 when FETCH_HIGH =>
+                    reset_controls;
                     irh_write_enable <= '1';
                     addr_select <= ADDR_SELECT_PC;
                     state <= INC_PC_1;
 
                 when INC_PC_1 =>
+                    reset_controls;
                     pc_write_enable <= '1';
                     pc_in_select <= PC_IN_SELECT_INCREMENT;
                     state <= FETCH_LOW;
 
                 when FETCH_LOW =>
+                    reset_controls;
                     irl_write_enable <= '1';
                     addr_select <= ADDR_SELECT_PC;
                     state <= INC_PC_2;
 
                 when INC_PC_2 =>
+                    reset_controls;
                     pc_write_enable <= '1';
                     pc_in_select <= PC_IN_SELECT_INCREMENT;
                     state <= DECODE;
 
                 when DECODE =>
-                    -- Figure out opcode and set things accordingly
-                    state <= FETCH_HIGH;
+                    reset_controls;
+                    case opcode is
+                        when OP_NOP =>
+                            state <= EXECUTE_NOP;
+                        when OP_HALT =>
+                            state <= EXECUTE_HALT;
+                        when OP_COPY =>
+                            state <= EXECUTE_COPY;
+                        when OP_LOAD =>
+                            state <= EXECUTE_LOAD;
+                        when OP_STORE =>
+                            state <= EXECUTE_STORE;
+                        when OP_SET_PAGE =>
+                            state <= EXECUTE_SET_PAGE;
+                        when OP_JUMP =>
+                            state <= EXECUTE_JUMP;
+                        when OP_JUMP_Z | OP_JUMP_C | OP_JUMP_NZ | OP_JUMP_NC =>
+                            state <= EXECUTE_TEST;
+                        when OP_SHIFT_L =>
+                            state <= EXECUTE_SHIFT_L;
+                        when OP_SHIFT_R =>
+                            state <= EXECUTE_SHIFT_R;
+                        when OP_ADD | OP_INC =>
+                            state <= EXECUTE_CLEAR_CARRY;
+                        when OP_AND | OP_OR | OP_XOR | OP_NOT | OP_ADD_C | OP_INC_C =>
+                            state <= EXECUTE_ALU_OP;
+                        when others =>
+                            state <= ERROR;
+                    end case;
+
+                when EXECUTE_NOP =>
+                    -- This case is intentionally left blank
+                    state <= EXECUTE_END;
+
+                when EXECUTE_HALT =>
+                    h_in <= '1';
+                    h_write_enable <= '1';
+                    state <= EXECUTE_END;
+
+                when EXECUTE_COPY =>
+                    rx_write_enable <= '1';
+                    rx_in_select <= RX_IN_SELECT_RY;
+                    state <= EXECUTE_END;
+
+                when EXECUTE_LOAD =>
+                    rx_write_enable <= '1';
+                    addr_select <= ADDR_SELECT_INDEXED;
+                    rx_in_select <= RX_IN_SELECT_LOAD;
+                    state <= EXECUTE_END;
+
+                when EXECUTE_STORE =>
+                    mem_write_enable <= '1';
+                    addr_select <= ADDR_SELECT_INDEXED;
+                    state <= EXECUTE_END;
+
+                when EXECUTE_SET_PAGE =>
+                    pg_write_enable <= '1';
+                    state <= EXECUTE_END;
+
+                when EXECUTE_JUMP =>
+                    pc_write_enable <= '1';
+                    pc_in_select <= PC_IN_SELECT_OPERAND;
+                    state <= EXECUTE_END;
+
+                when EXECUTE_TEST =>
+                    if test = '1' then
+                        state <= EXECUTE_JUMP;
+                    else
+                        state <= EXECUTE_END;
+                    end if;
+
+                when EXECUTE_SHIFT_L =>
+                    assert false report "lsh is not yet implemented" severity failure;
+
+                when EXECUTE_SHIFT_R =>
+                    assert false report "rsh is not yet implemented" severity failure;
+
+                when EXECUTE_CLEAR_CARRY =>
+                    assert false report "add and inc are not yet implemented" severity failure;
+
+                when EXECUTE_ALU_OP =>
+                    rx_write_enable <= '1';
+                    c_write_enable <= '1';
+                    z_write_enable <= '1';
+                    rx_in_select <= RX_IN_SELECT_RESULT;
+                    state <= EXECUTE_END;
+
+                when EXECUTE_END =>
+                    reset_controls;
+                    if halt = '0' then
+                        state <= FETCH_HIGH;
+                    end if;
+
+                when ERROR =>
+                    -- oh no!
             end case;
         end if;
     end process;
