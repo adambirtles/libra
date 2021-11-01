@@ -28,6 +28,8 @@ package opcodes is
     constant OP_JUMP_NC:  cpu_opcode := "01011";
     constant OP_SHIFT_L:  cpu_opcode := "01100";
     constant OP_SHIFT_R:  cpu_opcode := "01101";
+    constant OP_SHIFT_LC: cpu_opcode := "01110";
+    constant OP_SHIFT_RC: cpu_opcode := "01111";
     constant OP_ADD:      cpu_opcode := "10" & ALU_OP_ADD;
     constant OP_INC:      cpu_opcode := "10" & ALU_OP_INC;
     constant OP_AND:      cpu_opcode := "11" & ALU_OP_AND;

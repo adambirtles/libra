@@ -101,26 +101,28 @@ Some register instructions do not use RY. Load/Store instructions concatenate th
 
 The instructions are as follows:
 
-| Name               | Opcode | Layout     | Description                   |
-|:-------------------|:------:|:-----------|:------------------------------|
-| No-op              | 00000  | No operand | Do nothing                    |
-| Halt               | 00001  | No operand | Set `h`                       |
-| Copy               | 00010  | Register   | `RX ← RY`                     |
-| Load               | 00011  | Load/Store | `RX ← M[PG . IR[7:0]]`        |
-| Store              | 00100  | Load/Store | `M[PG . IR[7:0]] ← RX`        |
-| Set page register  | 00101  | Immediate  | `PG ← IR[4:0]`                |
-| Jump               | 00110  | Immediate  | `PC[12:1] ← IR[11:0]`         |
-| Jump if zero       | 01000  | Immediate  | Jump if `z` is set            |
-| Jump if carry      | 01001  | Immediate  | Jump if `c` is set            |
-| Jump if not zero   | 01010  | Immediate  | Jump if `z` is not set        |
-| Jump if not carry  | 01011  | Immediate  | Jump if `c` is not set        |
-| Left shift         | 01100  | Register   | `RX ← RX << 1`                |
-| Right shift        | 01101  | Register   | `RX ← RX >> 1`                |
-| Add                | 10100  | Register   | Clear `c` then `RX ← RX + RY` |
-| Increment          | 10101  | Register   | Clear `c` then `RX ← RX + 1`  |
-| Bitwise AND        | 11000  | Register   | `RX ← RX & RY`                |
-| Bitwise OR         | 11001  | Register   | `RX ← RX \| RY`               |
-| Bitwise XOR        | 11010  | Register   | `RX ← RX ^ RY`                |
-| Bitwise NOT        | 11011  | Register   | `RX ← ~RX`                    |
-| Add w/ carry       | 11100  | Register   | `RX ← RX + RY`                |
-| Increment w/ carry | 11101  | Register   | `RX ← RX + 1`                 |
+| Name                 | Opcode | Layout     | Description                   |
+|:---------------------|:------:|:-----------|:------------------------------|
+| No-op                | 00000  | No operand | Do nothing                    |
+| Halt                 | 00001  | No operand | Set `h`                       |
+| Copy                 | 00010  | Register   | `RX ← RY`                     |
+| Load                 | 00011  | Load/Store | `RX ← M[PG . IR[7:0]]`        |
+| Store                | 00100  | Load/Store | `M[PG . IR[7:0]] ← RX`        |
+| Set page register    | 00101  | Immediate  | `PG ← IR[4:0]`                |
+| Jump                 | 00110  | Immediate  | `PC[12:1] ← IR[11:0]`         |
+| Jump if zero         | 01000  | Immediate  | Jump if `z` is set            |
+| Jump if carry        | 01001  | Immediate  | Jump if `c` is set            |
+| Jump if not zero     | 01010  | Immediate  | Jump if `z` is not set        |
+| Jump if not carry    | 01011  | Immediate  | Jump if `c` is not set        |
+| Left shift           | 01100  | Register   | Clear `c` then `RX ← RX << 1` |
+| Right shift          | 01101  | Register   | Clear `c` then `RX ← RX >> 1` |
+| Left shift w/ carry  | 01111  | Register   | `RX ← RX << 1`                |
+| Right shift w/ carry | 01111  | Register   | `RX ← RX >> 1`                |
+| Add                  | 10100  | Register   | Clear `c` then `RX ← RX + RY` |
+| Increment            | 10101  | Register   | Clear `c` then `RX ← RX + 1`  |
+| Bitwise AND          | 11000  | Register   | `RX ← RX & RY`                |
+| Bitwise OR           | 11001  | Register   | `RX ← RX \| RY`               |
+| Bitwise XOR          | 11010  | Register   | `RX ← RX ^ RY`                |
+| Bitwise NOT          | 11011  | Register   | `RX ← ~RX`                    |
+| Add w/ carry         | 11100  | Register   | `RX ← RX + RY`                |
+| Increment w/ carry   | 11101  | Register   | `RX ← RX + 1`                 |

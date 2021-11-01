@@ -14,7 +14,8 @@ entity cpu_parallel is
         mem_addr: out unsigned(11 downto 0);
         mem_write_enable: out std_ulogic;
 
-        halted: out std_ulogic
+        halted: out std_ulogic;
+        errored: out std_ulogic
     );
 end entity;
 
@@ -23,7 +24,6 @@ architecture rtl of cpu_parallel is
     signal carry: std_ulogic;
     signal zero: std_ulogic;
 
-    signal h_in: std_ulogic;
     signal c_in: std_ulogic;
     signal z_in: std_ulogic;
 
@@ -37,6 +37,10 @@ architecture rtl of cpu_parallel is
     signal rx_out: std_ulogic_vector(7 downto 0);
     signal ry_out: std_ulogic_vector(7 downto 0);
     signal alu_result: std_ulogic_vector(7 downto 0);
+    signal shifter_result: std_ulogic_vector(7 downto 0);
+
+    signal alu_carry: std_ulogic;
+    signal shifter_carry: std_ulogic;
 
     signal pc_in: unsigned(11 downto 0);
     signal pc_out: unsigned(11 downto 0);
@@ -55,12 +59,12 @@ architecture rtl of cpu_parallel is
     signal pg_write_enable: std_ulogic;
     signal irh_write_enable: std_ulogic;
     signal irl_write_enable: std_ulogic;
-    signal h_write_enable: std_ulogic;
     signal c_write_enable: std_ulogic;
     signal z_write_enable: std_ulogic;
     signal addr_select: std_ulogic;
     signal pc_in_select: std_ulogic;
     signal rx_in_select: std_ulogic_vector(1 downto 0);
+    signal c_in_select: std_ulogic_vector(1 downto 0);
 
     -- Select constants
     constant ADDR_SELECT_PC: std_ulogic := '0';
@@ -70,13 +74,18 @@ architecture rtl of cpu_parallel is
     constant PC_IN_SELECT_OPERAND: std_ulogic := '1';
 
     constant RX_IN_SELECT_LOAD: std_ulogic_vector(1 downto 0) := "00";
-    constant RX_IN_SELECT_RESULT: std_ulogic_vector(1 downto 0) := "01";
-    constant RX_IN_SELECT_RY: std_ulogic_vector(1 downto 0) := "10";
+    constant RX_IN_SELECT_RY: std_ulogic_vector(1 downto 0) := "01";
+    constant RX_IN_SELECT_ALU: std_ulogic_vector(1 downto 0) := "10";
+    constant RX_IN_SELECT_SHIFTER: std_ulogic_vector(1 downto 0) := "11";
+
+    constant C_IN_SELECT_CLEAR: std_ulogic_vector(1 downto 0) := "00";
+    constant C_IN_SELECT_ALU: std_ulogic_vector(1 downto 0) := "01";
+    constant C_IN_SELECT_SHIFTER: std_ulogic_vector(1 downto 0) := "10";
 
     constant TEST_SELECT_ZERO: std_ulogic := '0';
     constant TEST_SELECT_CARRY: std_ulogic := '1';
 
-    type state_t is (
+    type cpu_state is (
         -- Fetch
         FETCH_HIGH,
         INC_PC_1,
@@ -95,16 +104,15 @@ architecture rtl of cpu_parallel is
         EXECUTE_SET_PAGE,
         EXECUTE_JUMP,
         EXECUTE_TEST,
-        EXECUTE_SHIFT_L,
-        EXECUTE_SHIFT_R,
         EXECUTE_CLEAR_CARRY,
+        EXECUTE_SHIFT,
         EXECUTE_ALU_OP,
         EXECUTE_END,
 
         -- Error
         ERROR
     );
-    signal state: state_t;
+    signal state: cpu_state;
 begin
     regfile: entity work.parallel_register_file(rtl)
         generic map(data_width => 8)
@@ -127,7 +135,17 @@ begin
             rhs => ry_out,
             carry_in => carry,
             result => alu_result,
-            carry_out => c_in
+            carry_out => alu_carry
+        );
+
+    shifter: entity work.shifter(struct)
+        generic map(data_width => 8)
+        port map(
+            rightwards => opcode(0),
+            carry_in => carry,
+            data_in => rx_out,
+            data_out => shifter_result,
+            carry_out => shifter_carry
         );
 
     -- IR is implemented as two 8-bit registers
@@ -178,14 +196,6 @@ begin
         );
 
     -- Flags
-    halt_flag: entity work.flag(rtl)
-        port map(
-            clock => clock,
-            n_reset => n_reset,
-            write_enable => h_write_enable,
-            data_in => h_in,
-            data_out => halt
-        );
     carry_flag: entity work.flag(rtl)
         port map(
             clock => clock,
@@ -219,9 +229,18 @@ begin
     mux_rx_in: with rx_in_select
     select rx_in <=
         mem_read        when RX_IN_SELECT_LOAD,
-        alu_result      when RX_IN_SELECT_RESULT,
         ry_out          when RX_IN_SELECT_RY,
+        alu_result      when RX_IN_SELECT_ALU,
+        shifter_result  when RX_IN_SELECT_SHIFTER,
         (others => 'X') when others;
+
+    mux_c_in: with c_in_select
+    select c_in <=
+        '0'           when C_IN_SELECT_CLEAR,
+        alu_carry     when C_IN_SELECT_ALU,
+        shifter_carry when C_IN_SELECT_SHIFTER,
+        'X'           when others;
+
 
     mux_test: with opcode(0)
     select selected_test <=
@@ -234,7 +253,6 @@ begin
     z_in <= '1' when alu_result = "00000000" else '0';
 
     mem_write <= rx_out;
-    halted <= halt;
 
     opcode <= ir_out(15 downto 11);
     operand_rx <= ir_out(10 downto 7);
@@ -243,53 +261,48 @@ begin
     operand_immediate <= ir_out(10 downto 0);
 
     process(clock, n_reset)
-        procedure reset_controls is
-        begin
-            mem_write_enable <= '0';
-            rx_write_enable <= '0';
-            pc_write_enable <= '0';
-            pg_write_enable <= '0';
-            irh_write_enable <= '0';
-            irl_write_enable <= '0';
-            h_write_enable <= '0';
-            c_write_enable <= '0';
-            z_write_enable <= '0';
-            addr_select <= '0';
-            pc_in_select <= '0';
-            rx_in_select <= "00";
-        end procedure;
     begin
+        mem_write_enable <= '0';
+        rx_write_enable <= '0';
+        pc_write_enable <= '0';
+        pg_write_enable <= '0';
+        irh_write_enable <= '0';
+        irl_write_enable <= '0';
+        c_write_enable <= '0';
+        z_write_enable <= '0';
+        addr_select <= '0';
+        pc_in_select <= '0';
+        rx_in_select <= "00";
+        c_in_select <= "00";
+
         if n_reset = '0' then
-            reset_controls;
             state <= FETCH_HIGH;
+            halt <= '0';
+            halted <= '0';
+            errored <= '0';
         elsif falling_edge(clock) then
             case state is
                 when FETCH_HIGH =>
-                    reset_controls;
                     irh_write_enable <= '1';
                     addr_select <= ADDR_SELECT_PC;
                     state <= INC_PC_1;
 
                 when INC_PC_1 =>
-                    reset_controls;
                     pc_write_enable <= '1';
                     pc_in_select <= PC_IN_SELECT_INCREMENT;
                     state <= FETCH_LOW;
 
                 when FETCH_LOW =>
-                    reset_controls;
                     irl_write_enable <= '1';
                     addr_select <= ADDR_SELECT_PC;
                     state <= INC_PC_2;
 
                 when INC_PC_2 =>
-                    reset_controls;
                     pc_write_enable <= '1';
                     pc_in_select <= PC_IN_SELECT_INCREMENT;
                     state <= DECODE;
 
                 when DECODE =>
-                    reset_controls;
                     case opcode is
                         when OP_NOP =>
                             state <= EXECUTE_NOP;
@@ -307,10 +320,10 @@ begin
                             state <= EXECUTE_JUMP;
                         when OP_JUMP_Z | OP_JUMP_C | OP_JUMP_NZ | OP_JUMP_NC =>
                             state <= EXECUTE_TEST;
-                        when OP_SHIFT_L =>
-                            state <= EXECUTE_SHIFT_L;
-                        when OP_SHIFT_R =>
-                            state <= EXECUTE_SHIFT_R;
+                        when OP_SHIFT_L | OP_SHIFT_R =>
+                            state <= EXECUTE_CLEAR_CARRY;
+                        when OP_SHIFT_LC | OP_SHIFT_RC =>
+                            state <= EXECUTE_SHIFT;
                         when OP_ADD | OP_INC =>
                             state <= EXECUTE_CLEAR_CARRY;
                         when OP_AND | OP_OR | OP_XOR | OP_NOT | OP_ADD_C | OP_INC_C =>
@@ -324,8 +337,7 @@ begin
                     state <= EXECUTE_END;
 
                 when EXECUTE_HALT =>
-                    h_in <= '1';
-                    h_write_enable <= '1';
+                    halt <= '1';
                     state <= EXECUTE_END;
 
                 when EXECUTE_COPY =>
@@ -360,30 +372,43 @@ begin
                         state <= EXECUTE_END;
                     end if;
 
-                when EXECUTE_SHIFT_L =>
-                    assert false report "lsh is not yet implemented" severity failure;
-
-                when EXECUTE_SHIFT_R =>
-                    assert false report "rsh is not yet implemented" severity failure;
-
                 when EXECUTE_CLEAR_CARRY =>
-                    assert false report "add and inc are not yet implemented" severity failure;
+                    c_write_enable <= '1';
+                    c_in_select <= C_IN_SELECT_CLEAR;
+                    case opcode is
+                        when OP_SHIFT_L | OP_SHIFT_R =>
+                            state <= EXECUTE_SHIFT;
+                        when OP_ADD | OP_INC =>
+                            state <= EXECUTE_ALU_OP;
+                        when others =>
+                            state <= ERROR;
+                    end case;
+
+                when EXECUTE_SHIFT =>
+                    rx_write_enable <= '1';
+                    c_write_enable <= '1';
+                    z_write_enable <= '1';
+                    rx_in_select <= RX_IN_SELECT_SHIFTER;
+                    c_in_select <= C_IN_SELECT_SHIFTER;
+                    state <= EXECUTE_END;
 
                 when EXECUTE_ALU_OP =>
                     rx_write_enable <= '1';
                     c_write_enable <= '1';
                     z_write_enable <= '1';
-                    rx_in_select <= RX_IN_SELECT_RESULT;
+                    rx_in_select <= RX_IN_SELECT_ALU;
+                    c_in_select <= C_IN_SELECT_ALU;
                     state <= EXECUTE_END;
 
                 when EXECUTE_END =>
-                    reset_controls;
+                    halted <= halt;
                     if halt = '0' then
                         state <= FETCH_HIGH;
                     end if;
 
                 when ERROR =>
                     -- oh no!
+                    errored <= '1';
             end case;
         end if;
     end process;
