@@ -4,7 +4,8 @@ use ieee.numeric_std.all;
 
 use work.opcodes.all;
 
-entity cpu_parallel is
+entity cpu is
+    generic(bit_serial: boolean);
     port(
         clock: in std_ulogic;
         n_reset: in std_ulogic;
@@ -19,7 +20,7 @@ entity cpu_parallel is
     );
 end entity;
 
-architecture rtl of cpu_parallel is
+architecture rtl of cpu is
     signal halt: std_ulogic;
     signal carry: std_ulogic;
     signal zero: std_ulogic;

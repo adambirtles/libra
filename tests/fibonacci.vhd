@@ -75,7 +75,8 @@ begin
         end if;
     end process;
 
-    uut: entity libra.cpu_parallel(rtl)
+    uut: entity libra.cpu(rtl)
+        generic map(bit_serial => false)
         port map(
             clock => clock,
             n_reset => n_reset,
