@@ -54,6 +54,16 @@ begin
             when ALU_OP_INC =>
                 arithmetic_result(lhs_unsigned + to_unsigned(1, data_width + 1) + carry);
 
+            when ALU_OP_LSHIFT =>
+                carry_out <= lhs(data_width - 1);
+                result((data_width - 1) downto 1) <= lhs((data_width - 2) downto 0);
+                result(0) <= carry_in;
+
+            when ALU_OP_RSHIFT =>
+                carry_out <= lhs(0);
+                result((data_width - 2) downto 0) <= lhs((data_width - 1) downto 1);
+                result(data_width - 1) <= carry_in;
+
             when others =>
                 result <= (others => 'X');
         end case;

@@ -37,10 +37,8 @@ architecture rtl of cpu_parallel is
     signal rx_out: std_ulogic_vector(7 downto 0);
     signal ry_out: std_ulogic_vector(7 downto 0);
     signal alu_result: std_ulogic_vector(7 downto 0);
-    signal shifter_result: std_ulogic_vector(7 downto 0);
 
     signal alu_carry: std_ulogic;
-    signal shifter_carry: std_ulogic;
 
     signal pc_in: unsigned(11 downto 0);
     signal pc_out: unsigned(11 downto 0);
@@ -64,7 +62,7 @@ architecture rtl of cpu_parallel is
     signal addr_select: std_ulogic;
     signal pc_in_select: std_ulogic;
     signal rx_in_select: std_ulogic_vector(1 downto 0);
-    signal c_in_select: std_ulogic_vector(1 downto 0);
+    signal c_in_select: std_ulogic;
 
     -- Select constants
     constant ADDR_SELECT_PC: std_ulogic := '0';
@@ -76,11 +74,9 @@ architecture rtl of cpu_parallel is
     constant RX_IN_SELECT_LOAD: std_ulogic_vector(1 downto 0) := "00";
     constant RX_IN_SELECT_RY: std_ulogic_vector(1 downto 0) := "01";
     constant RX_IN_SELECT_ALU: std_ulogic_vector(1 downto 0) := "10";
-    constant RX_IN_SELECT_SHIFTER: std_ulogic_vector(1 downto 0) := "11";
 
-    constant C_IN_SELECT_CLEAR: std_ulogic_vector(1 downto 0) := "00";
-    constant C_IN_SELECT_ALU: std_ulogic_vector(1 downto 0) := "01";
-    constant C_IN_SELECT_SHIFTER: std_ulogic_vector(1 downto 0) := "10";
+    constant C_IN_SELECT_CLEAR: std_ulogic := '0';
+    constant C_IN_SELECT_ALU: std_ulogic := '1';
 
     constant TEST_SELECT_ZERO: std_ulogic := '0';
     constant TEST_SELECT_CARRY: std_ulogic := '1';
@@ -105,7 +101,6 @@ architecture rtl of cpu_parallel is
         EXECUTE_JUMP,
         EXECUTE_TEST,
         EXECUTE_CLEAR_CARRY,
-        EXECUTE_SHIFT,
         EXECUTE_ALU_OP,
         EXECUTE_END,
 
@@ -136,16 +131,6 @@ begin
             carry_in => carry,
             result => alu_result,
             carry_out => alu_carry
-        );
-
-    shifter: entity work.shifter(struct)
-        generic map(data_width => 8)
-        port map(
-            rightwards => opcode(0),
-            carry_in => carry,
-            data_in => rx_out,
-            data_out => shifter_result,
-            carry_out => shifter_carry
         );
 
     -- IR is implemented as two 8-bit registers
@@ -231,14 +216,12 @@ begin
         mem_read        when RX_IN_SELECT_LOAD,
         ry_out          when RX_IN_SELECT_RY,
         alu_result      when RX_IN_SELECT_ALU,
-        shifter_result  when RX_IN_SELECT_SHIFTER,
         (others => 'X') when others;
 
     mux_c_in: with c_in_select
     select c_in <=
         '0'           when C_IN_SELECT_CLEAR,
         alu_carry     when C_IN_SELECT_ALU,
-        shifter_carry when C_IN_SELECT_SHIFTER,
         'X'           when others;
 
 
@@ -273,7 +256,7 @@ begin
         addr_select <= '0';
         pc_in_select <= '0';
         rx_in_select <= "00";
-        c_in_select <= "00";
+        c_in_select <= '0';
 
         if n_reset = '0' then
             state <= FETCH_HIGH;
@@ -320,13 +303,9 @@ begin
                             state <= EXECUTE_JUMP;
                         when OP_JUMP_Z | OP_JUMP_C | OP_JUMP_NZ | OP_JUMP_NC =>
                             state <= EXECUTE_TEST;
-                        when OP_SHIFT_L | OP_SHIFT_R =>
+                        when OP_ADD | OP_INC | OP_LSHIFT | OP_RSHIFT =>
                             state <= EXECUTE_CLEAR_CARRY;
-                        when OP_SHIFT_LC | OP_SHIFT_RC =>
-                            state <= EXECUTE_SHIFT;
-                        when OP_ADD | OP_INC =>
-                            state <= EXECUTE_CLEAR_CARRY;
-                        when OP_AND | OP_OR | OP_XOR | OP_NOT | OP_ADD_C | OP_INC_C =>
+                        when OP_AND | OP_OR | OP_XOR | OP_NOT | OP_ADD_C | OP_INC_C | OP_LSHIFT_C | OP_RSHIFT_C =>
                             state <= EXECUTE_ALU_OP;
                         when others =>
                             state <= ERROR;
@@ -375,22 +354,7 @@ begin
                 when EXECUTE_CLEAR_CARRY =>
                     c_write_enable <= '1';
                     c_in_select <= C_IN_SELECT_CLEAR;
-                    case opcode is
-                        when OP_SHIFT_L | OP_SHIFT_R =>
-                            state <= EXECUTE_SHIFT;
-                        when OP_ADD | OP_INC =>
-                            state <= EXECUTE_ALU_OP;
-                        when others =>
-                            state <= ERROR;
-                    end case;
-
-                when EXECUTE_SHIFT =>
-                    rx_write_enable <= '1';
-                    c_write_enable <= '1';
-                    z_write_enable <= '1';
-                    rx_in_select <= RX_IN_SELECT_SHIFTER;
-                    c_in_select <= C_IN_SELECT_SHIFTER;
-                    state <= EXECUTE_END;
+                    state <= EXECUTE_ALU_OP;
 
                 when EXECUTE_ALU_OP =>
                     rx_write_enable <= '1';
@@ -401,9 +365,10 @@ begin
                     state <= EXECUTE_END;
 
                 when EXECUTE_END =>
-                    halted <= halt;
                     if halt = '0' then
                         state <= FETCH_HIGH;
+                    else
+                        halted <= halt;
                     end if;
 
                 when ERROR =>
