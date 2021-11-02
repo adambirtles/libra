@@ -25,23 +25,24 @@ architecture sim of fibonacci_tb is
     constant N: std_ulogic_vector(7 downto 0) := x"0a";     -- N = 10
     constant FIB_N: std_ulogic_vector(7 downto 0) := x"37"; -- fib(10) = 55
 
-    constant PROGRAM: data_vector(0 to 35) := (
+    constant PROGRAM: data_vector(0 to 37) := (
         x"28", x"01", -- setpg 1
+        x"1f", x"83", -- load r15, 3
         x"18", x"00", -- load r0, 0
-        x"1f", x"82", -- load r15, 2
-        x"c7", x"80", -- and r15, r0
-        x"40", x"10", -- jumpz $end
+        x"1a", x"02", -- load r4, 2
+        x"c2", x"00", -- and r4, r0
+        x"40", x"11", -- jumpz $end
         x"18", x"81", -- load r1, 1
         x"19", x"03", -- load r2, 3
         x"19", x"84", -- load r3, 4
-        x"17", x"98", -- copy r15, r3   ($loop)
-        x"d7", x"80", -- xor r15, r0
-        x"40", x"10", -- jumpz $end
+        x"12", x"18", -- copy r4, r3    ($loop)
+        x"d2", x"00", -- xor r4, r0
+        x"40", x"11", -- jumpz $end
         x"12", x"08", -- copy r4, r1
         x"a0", x"90", -- add r1, r2
         x"11", x"20", -- copy r2, r4
-        x"a9", x"80", -- inc r3
-        x"30", x"08", -- jump $loop
+        x"a1", x"f9", -- add r3, r15
+        x"30", x"09", -- jump $loop
         x"20", x"81", -- store r1, 1    ($end)
         x"08", x"00"  -- halt
     );

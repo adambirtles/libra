@@ -35,6 +35,8 @@ begin
         lhs_unsigned := unsigned('0' & lhs);
         carry := (0 => carry_in);
 
+        carry_out <= '0';
+
         case opcode is
             when ALU_OP_AND =>
                 result <= lhs and rhs;
@@ -51,9 +53,6 @@ begin
             when ALU_OP_ADD =>
                 arithmetic_result(lhs_unsigned + unsigned('0' & rhs) + carry);
 
-            when ALU_OP_INC =>
-                arithmetic_result(lhs_unsigned + to_unsigned(1, data_width + 1) + carry);
-
             when ALU_OP_LSHIFT =>
                 carry_out <= lhs(data_width - 1);
                 result((data_width - 1) downto 1) <= lhs((data_width - 2) downto 0);
@@ -66,6 +65,7 @@ begin
 
             when others =>
                 result <= (others => 'X');
+                carry_out <= 'X';
         end case;
     end process;
 end architecture;

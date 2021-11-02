@@ -15,7 +15,6 @@ Libra's arithmetic and logic unit (ALU) supports eight operations. Four operatio
 
 The other four are unary:
 
-- Increment
 - Bitwise NOT
 - Left bit shift
 - Right bit shift
@@ -117,7 +116,6 @@ The instructions are as follows:
 | Jump if not zero     | 01010  | Immediate  | Jump if `z` is not set        |
 | Jump if not carry    | 01011  | Immediate  | Jump if `c` is not set        |
 | Add                  | 10100  | Register   | Clear `c` then `RX ← RX + RY` |
-| Increment            | 10101  | Register   | Clear `c` then `RX ← RX + 1`  |
 | Left shift           | 10110  | Register   | Clear `c` then `RX ← RX << 1` |
 | Right shift          | 10111  | Register   | Clear `c` then `RX ← RX >> 1` |
 | Bitwise AND          | 11000  | Register   | `RX ← RX & RY`                |
@@ -125,6 +123,5 @@ The instructions are as follows:
 | Bitwise XOR          | 11010  | Register   | `RX ← RX ^ RY`                |
 | Bitwise NOT          | 11011  | Register   | `RX ← ~RX`                    |
 | Add w/ carry         | 11100  | Register   | `RX ← RX + RY`                |
-| Increment w/ carry   | 11101  | Register   | `RX ← RX + 1`                 |
 | Left shift w/ carry  | 11110  | Register   | `RX ← RX << 1`                |
 | Right shift w/ carry | 11111  | Register   | `RX ← RX >> 1`                |
