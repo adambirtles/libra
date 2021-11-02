@@ -27,7 +27,7 @@ begin
             data <= (others => '0');
         elsif rising_edge(clock) then
             if shift_enable = '1' then
-                data(0 to (data_width - 2)) <= data(1 to (data_width - 1));
+                data((data_width - 2) downto 0) <= data((data_width - 1) downto 1);
                 data(data_width - 1) <= data_in;
             end if;
         end if;

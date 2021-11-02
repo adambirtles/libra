@@ -48,7 +48,8 @@ begin
         with selected_x(r)
         select reg_ins(r) <=
             x_in           when '1',
-            reg_outs(r)(0) when '0';
+            reg_outs(r)(0) when '0',
+            'X'            when others;
 
         reg: entity work.sipo_register(rtl)
             generic map(data_width => data_width)
