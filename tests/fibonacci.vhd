@@ -151,49 +151,46 @@ begin
     clock_process: clock <= not clock after PERIOD / 2;
 
     test_process: process is
+        function msg(cpu: cpu_type; message: string) return string is
+        begin
+            return cpu_type'image(cpu) & ": " & message;
+        end function;
+
+        function value(n: std_ulogic_vector(7 downto 0)) return string is
+        begin
+            return integer'image(to_integer(unsigned(n)));
+        end function;
+
         procedure test_cpu(
-            constant sel: in cpu_type;
+            constant cpu: in cpu_type;
             signal halted: in std_ulogic;
-            signal errored: in std_ulogic;
-            variable result: out boolean) is
+            signal errored: in std_ulogic
+        ) is
+            variable result: std_ulogic_vector(7 downto 0);
         begin
             -- Reset system and switch to selected CPU
             n_reset <= '0';
-            cpu_select <= sel;
+            cpu_select <= cpu;
             wait for PERIOD;
 
             -- Bring system out of reset and run until CPU halts (or errors)
             n_reset <= '1';
-            wait for PERIOD;
+            report msg(cpu, "Started");
             wait until halted = '1' or errored = '1';
 
             -- Check the results
-            assert errored = '0' report "CPU error!" severity failure;
-            result := memory(loc(1, 1)) = FIB_N;
+            assert errored = '0' report msg(cpu, "CPU error!") severity failure;
+
+            result := memory(loc(1, 1));
+            if result = FIB_N then
+                report msg(cpu, "Passed");
+            else
+                report msg(cpu, "Failed! Expected " & value(FIB_N) & ", got " & value(result)) severity error;
+            end if;
         end procedure;
-
-        variable test_passed: boolean;
     begin
-        -- Test classical CPU
-        report "Testing parallel";
-        test_cpu(PARALLEL, parallel_halted, parallel_errored, test_passed);
-        report "Parallel CPU halted";
-        if test_passed then
-            report "Parallel passed";
-        else
-            assert false report "Parallel failed" severity error;
-        end if;
-
-        -- Test bit-serial CPU
-        report "Testing serial";
-        test_cpu(SERIAL, serial_halted, serial_errored, test_passed);
-        report "Serial CPU halted";
-        if test_passed then
-            report "Serial passed";
-        else
-            assert false report "Serial failed" severity error;
-        end if;
-
+        test_cpu(PARALLEL, parallel_halted, parallel_errored);
+        test_cpu(SERIAL, serial_halted, serial_errored);
         wait;
     end process;
 end architecture;
