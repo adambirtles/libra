@@ -59,9 +59,25 @@ architecture sim of fibonacci_tb is
     signal mem_write: std_ulogic_vector(7 downto 0);
     signal mem_addr: unsigned(11 downto 0);
     signal mem_write_enable: std_ulogic;
-    signal halted: std_ulogic;
-    signal errored: std_ulogic;
+
+    type cpu_type is (PARALLEL, SERIAL);
+    signal cpu_select: cpu_type;
+
+    signal parallel_n_reset: std_ulogic;
+    signal parallel_mem_write: std_ulogic_vector(7 downto 0);
+    signal parallel_mem_addr: unsigned(11 downto 0);
+    signal parallel_mem_write_enable: std_ulogic;
+    signal parallel_halted: std_ulogic;
+    signal parallel_errored: std_ulogic;
+
+    signal serial_n_reset: std_ulogic;
+    signal serial_mem_write: std_ulogic_vector(7 downto 0);
+    signal serial_mem_addr: unsigned(11 downto 0);
+    signal serial_mem_write_enable: std_ulogic;
+    signal serial_halted: std_ulogic;
+    signal serial_errored: std_ulogic;
 begin
+    -- Memory
     mem_read <= memory(to_integer(mem_addr));
 
     process(clock, n_reset)
@@ -76,41 +92,108 @@ begin
         end if;
     end process;
 
-    uut: entity libra.cpu(rtl)
+    -- CPUs
+    cpu_parallel: entity libra.cpu(rtl)
         generic map(bit_serial => false)
         port map(
             clock => clock,
-            n_reset => n_reset,
+            n_reset => parallel_n_reset,
             mem_read => mem_read,
-            mem_write => mem_write,
-            mem_addr => mem_addr,
-            mem_write_enable => mem_write_enable,
-            halted => halted,
-            errored => errored
+            mem_write => parallel_mem_write,
+            mem_addr => parallel_mem_addr,
+            mem_write_enable => parallel_mem_write_enable,
+            halted => parallel_halted,
+            errored => parallel_errored
         );
+
+    cpu_serial: entity libra.cpu(rtl)
+        generic map(bit_serial => true)
+        port map(
+            clock => clock,
+            n_reset => serial_n_reset,
+            mem_read => mem_read,
+            mem_write => serial_mem_write,
+            mem_addr => serial_mem_addr,
+            mem_write_enable => serial_mem_write_enable,
+            halted => serial_halted,
+            errored => serial_errored
+        );
+
+    -- CPU selection logic
+    process(cpu_select, n_reset) is
+    begin
+        parallel_n_reset <= '0';
+        serial_n_reset <= '0';
+
+        case cpu_select is
+            when PARALLEL =>
+                parallel_n_reset <= n_reset;
+            when SERIAL =>
+                serial_n_reset <= n_reset;
+        end case;
+    end process;
+
+    with cpu_select
+    select mem_write <=
+        parallel_mem_write when PARALLEL,
+        serial_mem_write   when SERIAL;
+
+    with cpu_select
+    select mem_addr <=
+        parallel_mem_addr when PARALLEL,
+        serial_mem_addr   when SERIAL;
+
+    with cpu_select
+    select mem_write_enable <=
+        parallel_mem_write_enable when PARALLEL,
+        serial_mem_write_enable   when SERIAL;
 
     clock_process: clock <= not clock after PERIOD / 2;
 
     test_process: process is
+        procedure test_cpu(
+            constant sel: in cpu_type;
+            signal halted: in std_ulogic;
+            signal errored: in std_ulogic;
+            variable result: out boolean) is
+        begin
+            -- Reset system and switch to selected CPU
+            n_reset <= '0';
+            cpu_select <= sel;
+            wait for PERIOD;
+
+            -- Bring system out of reset and run until CPU halts (or errors)
+            n_reset <= '1';
+            wait for PERIOD;
+            wait until halted = '1' or errored = '1';
+
+            -- Check the results
+            assert errored = '0' report "CPU error!" severity failure;
+            result := memory(loc(1, 1)) = FIB_N;
+        end procedure;
+
+        variable test_passed: boolean;
     begin
-        -- Reset system
-        n_reset <= '0';
-        wait for PERIOD;
-
-        -- Bring CPU out of reset and let it run until halted
-        n_reset <= '1';
-        wait until rising_edge(clock);
-        report "CPU started";
-        wait until halted = '1' or errored = '1';
-        assert errored = '0' report "CPU error!" severity failure;
-        report "CPU halted";
-
-        -- Check that CPU has correctly calculated fib(N)
-        if memory(loc(1, 1)) = FIB_N then
-            report "Pass!";
+        -- Test classical CPU
+        report "Testing parallel";
+        test_cpu(PARALLEL, parallel_halted, parallel_errored, test_passed);
+        report "Parallel CPU halted";
+        if test_passed then
+            report "Parallel passed";
         else
-            assert false report "Incorrect result!" severity error;
+            assert false report "Parallel failed" severity error;
         end if;
+
+        -- Test bit-serial CPU
+        report "Testing serial";
+        test_cpu(SERIAL, serial_halted, serial_errored, test_passed);
+        report "Serial CPU halted";
+        if test_passed then
+            report "Serial passed";
+        else
+            assert false report "Serial failed" severity error;
+        end if;
+
         wait;
     end process;
 end architecture;
