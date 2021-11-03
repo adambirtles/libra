@@ -2,7 +2,7 @@
 
 ## Components
 
-![Block diagram of a Libra implementation](block-diagram.png)
+![Block diagram of a Libra implementation](block-diagram-parallel.png)
 
 ### ALU
 
