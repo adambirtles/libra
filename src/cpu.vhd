@@ -54,24 +54,16 @@ architecture rtl of cpu is
     signal irl_write_enable: std_ulogic;
     signal c_write_enable: std_ulogic;
     signal z_write_enable: std_ulogic;
-    signal addr_select: std_ulogic;
-    signal pc_in_select: std_ulogic;
-    signal rx_in_select: std_ulogic_vector(1 downto 0);
 
-    -- Select constants
-    constant ADDR_SELECT_PC: std_ulogic := '0';
-    constant ADDR_SELECT_INDEXED: std_ulogic := '1';
+    -- Selectors
+    type addr_selector is (ADDR_SELECT_PC, ADDR_SELECT_INDEXED);
+    signal addr_select: addr_selector;
 
-    constant PC_IN_SELECT_INCREMENT: std_ulogic := '0';
-    constant PC_IN_SELECT_OPERAND: std_ulogic := '1';
-
-    constant RX_IN_SELECT_LOAD: std_ulogic_vector(1 downto 0) := "00";
-    constant RX_IN_SELECT_RY: std_ulogic_vector(1 downto 0) := "01";
-    constant RX_IN_SELECT_ALU: std_ulogic_vector(1 downto 0) := "10";
+    type pc_in_selector is (PC_IN_SELECT_INCREMENT, PC_IN_SELECT_OPERAND);
+    signal pc_in_select: pc_in_selector;
 
     constant TEST_SELECT_ZERO: std_ulogic := '0';
     constant TEST_SELECT_CARRY: std_ulogic := '1';
-
 begin
     -- IR is implemented as two 8-bit registers
     reg_irh: entity work.parallel_register(rtl)
@@ -140,14 +132,12 @@ begin
     mux_addr: with addr_select
     select mem_addr <=
         pc_out                           when ADDR_SELECT_PC,
-        unsigned(pg_out & operand_index) when ADDR_SELECT_INDEXED,
-        (others => 'X')                  when others;
+        unsigned(pg_out & operand_index) when ADDR_SELECT_INDEXED;
 
     mux_pc_in: with pc_in_select
     select pc_in <=
         pc_increment                      when PC_IN_SELECT_INCREMENT,
-        unsigned(operand_immediate & '0') when PC_IN_SELECT_OPERAND,
-        (others => 'X')                   when others;
+        unsigned(operand_immediate & '0') when PC_IN_SELECT_OPERAND;
 
     mux_test: with opcode(0)
     select selected_test <=
@@ -174,17 +164,20 @@ begin
         signal ld_write_enable: std_ulogic;
         signal ld_shift_enable: std_ulogic;
         signal regfile_shift_enable: std_ulogic;
-        signal c_in_select: std_ulogic_vector(1 downto 0);
-        signal z_in_select: std_ulogic;
 
-        constant C_IN_SELECT_CLEAR: std_ulogic_vector(1 downto 0) := "00";
-        constant C_IN_SELECT_ALU: std_ulogic_vector(1 downto 0) := "01";
-        constant C_IN_SELECT_RX: std_ulogic_vector(1 downto 0) := "10";
+        type rx_in_selector is (
+            RX_IN_SELECT_LOAD,
+            RX_IN_SELECT_RY,
+            RX_IN_SELECT_ALU,
+            RX_IN_SELECT_CARRY
+        );
+        signal rx_in_select: rx_in_selector;
 
-        constant Z_IN_SELECT_SET:  std_ulogic := '0';
-        constant Z_IN_SELECT_RESULT: std_ulogic := '1';
+        type c_in_selector is (C_IN_SELECT_CLEAR, C_IN_SELECT_ALU, C_IN_SELECT_RX);
+        signal c_in_select: c_in_selector;
 
-        constant RX_IN_SELECT_CARRY: std_ulogic_vector(1 downto 0) := "11";
+        type z_in_selector is (Z_IN_SELECT_SET, Z_IN_SELECT_RESULT);
+        signal z_in_select: z_in_selector;
 
         type cpu_state is (
             -- Fetch
@@ -261,31 +254,33 @@ begin
             ld_out     when RX_IN_SELECT_LOAD,
             ry_out(0)  when RX_IN_SELECT_RY,
             alu_result when RX_IN_SELECT_ALU,
-            carry      when RX_IN_SELECT_CARRY,
-            'X'        when others;
+            carry      when RX_IN_SELECT_CARRY;
 
         mux_c_in: with c_in_select
         select c_in <=
             '0'           when C_IN_SELECT_CLEAR,
             alu_carry     when C_IN_SELECT_ALU,
-            rx_out(0)     when C_IN_SELECT_RX,
-            'X'           when others;
+            rx_out(0)     when C_IN_SELECT_RX;
 
         mux_z_in: with z_in_select
         select z_in <=
             '1'                     when Z_IN_SELECT_SET,
-            zero and not alu_result when Z_IN_SELECT_RESULT,
-            'X'                     when others;
+            zero and not alu_result when Z_IN_SELECT_RESULT;
 
         mem_write <= rx_out;
 
         process(clock, n_reset) is
-            procedure next_step(signal count: inout steps; signal state: out cpu_state) is
+            procedure init_step(constant value: steps := 7) is
             begin
-                if count = 0 then
+                step_count <= value;
+            end procedure;
+
+            procedure next_step is
+            begin
+                if step_count = 0 then
                     state <= EXECUTE_END;
                 else
-                    count <= count - 1;
+                    step_count <= step_count - 1;
                 end if;
             end procedure;
         begin
@@ -296,15 +291,15 @@ begin
             irl_write_enable <= '0';
             c_write_enable <= '0';
             z_write_enable <= '0';
-            addr_select <= '0';
-            pc_in_select <= '0';
-            rx_in_select <= "00";
-            c_in_select <= "00";
+            addr_select <= ADDR_SELECT_PC;
+            pc_in_select <= PC_IN_SELECT_INCREMENT;
 
             ld_write_enable <= '0';
             ld_shift_enable <= '0';
             regfile_shift_enable <= '0';
-            z_in_select <= '0';
+            rx_in_select <= RX_IN_SELECT_LOAD;
+            c_in_select <= C_IN_SELECT_CLEAR;
+            z_in_select <= Z_IN_SELECT_SET;
 
             if n_reset = '0' then
                 state <= FETCH_HIGH;
@@ -340,7 +335,7 @@ begin
                             when OP_HALT =>
                                 state <= EXECUTE_HALT;
                             when OP_COPY =>
-                                step_count <= 7;
+                                init_step;
                                 state <= EXECUTE_COPY;
                             when OP_LOAD =>
                                 state <= EXECUTE_LOAD_FETCH;
@@ -371,19 +366,19 @@ begin
                     when EXECUTE_COPY =>
                         rx_in_select <= RX_IN_SELECT_RY;
                         regfile_shift_enable <= '1';
-                        next_step(step_count, state);
+                        next_step;
 
                     when EXECUTE_LOAD_FETCH =>
                         addr_select <= ADDR_SELECT_INDEXED;
                         ld_write_enable <= '1';
-                        step_count <= 7;
+                        init_step;
                         state <= EXECUTE_LOAD_SHIFT_IN;
 
                     when EXECUTE_LOAD_SHIFT_IN =>
                         rx_in_select <= RX_IN_SELECT_LOAD;
                         ld_shift_enable <= '1';
                         regfile_shift_enable <= '1';
-                        next_step(step_count, state);
+                        next_step;
 
                     when EXECUTE_STORE =>
                         mem_write_enable <= '1';
@@ -416,13 +411,13 @@ begin
                         z_in_select <= Z_IN_SELECT_SET;
                         case opcode is
                         when OP_RSHIFT | OP_RSHIFT_C =>
-                            step_count <= 0;
+                            init_step(0);
                             state <= EXECUTE_SHIFT;
                         when OP_LSHIFT | OP_LSHIFT_C =>
-                            step_count <= 7;
+                            init_step;
                             state <= EXECUTE_SHIFT;
                         when others =>
-                            step_count <= 7;
+                            init_step;
                             state <= EXECUTE_ALU_OP;
                         end case;
 
@@ -433,7 +428,7 @@ begin
                         c_in_select <= C_IN_SELECT_ALU;
                         regfile_shift_enable <= '1';
                         z_in_select <= Z_IN_SELECT_RESULT;
-                        next_step(step_count, state);
+                        next_step;
 
                     when EXECUTE_SHIFT =>
                         c_write_enable <= '1';
@@ -442,7 +437,7 @@ begin
                         c_in_select <= C_IN_SELECT_RX;
                         regfile_shift_enable <= '1';
                         z_in_select <= Z_IN_SELECT_RESULT;
-                        next_step(step_count, state);
+                        next_step;
 
                     when EXECUTE_END =>
                         if halt = '0' then
@@ -466,10 +461,12 @@ begin
         signal alu_result: std_ulogic_vector(7 downto 0);
 
         signal rx_write_enable: std_ulogic;
-        signal c_in_select: std_ulogic;
 
-        constant C_IN_SELECT_CLEAR: std_ulogic := '0';
-        constant C_IN_SELECT_ALU: std_ulogic := '1';
+        type c_in_selector is (C_IN_SELECT_CLEAR, C_IN_SELECT_ALU);
+        signal c_in_select: c_in_selector;
+
+        type rx_in_selector is (RX_IN_SELECT_LOAD, RX_IN_SELECT_RY, RX_IN_SELECT_ALU);
+        signal rx_in_select: rx_in_selector;
 
         type cpu_state is (
             -- Fetch
@@ -527,14 +524,12 @@ begin
         select rx_in <=
             mem_read        when RX_IN_SELECT_LOAD,
             ry_out          when RX_IN_SELECT_RY,
-            alu_result      when RX_IN_SELECT_ALU,
-            (others => 'X') when others;
+            alu_result      when RX_IN_SELECT_ALU;
 
         mux_c_in: with c_in_select
         select c_in <=
             '0'           when C_IN_SELECT_CLEAR,
-            alu_carry     when C_IN_SELECT_ALU,
-            'X'           when others;
+            alu_carry     when C_IN_SELECT_ALU;
 
         z_in <= '1' when alu_result = "00000000" else '0';
 
@@ -549,12 +544,12 @@ begin
             irl_write_enable <= '0';
             c_write_enable <= '0';
             z_write_enable <= '0';
-            addr_select <= '0';
-            pc_in_select <= '0';
-            rx_in_select <= "00";
-            c_in_select <= '0';
+            addr_select <= ADDR_SELECT_PC;
+            pc_in_select <= PC_IN_SELECT_INCREMENT;
 
             rx_write_enable <= '0';
+            rx_in_select <= RX_IN_SELECT_LOAD;
+            c_in_select <= C_IN_SELECT_CLEAR;
 
             if n_reset = '0' then
                 state <= FETCH_HIGH;

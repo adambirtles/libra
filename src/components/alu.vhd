@@ -21,20 +21,8 @@ end entity;
 architecture struct of alu is
 begin
     process(opcode, lhs, rhs, carry_in)
-        variable lhs_unsigned: unsigned(data_width downto 0);
-        variable carry: unsigned(0 downto 0);
-
-        procedure arithmetic_result(
-            constant res: in unsigned(data_width downto 0)
-        ) is
-        begin
-            result <= std_ulogic_vector(res((data_width - 1) downto 0));
-            carry_out <= res(data_width);
-        end procedure;
+        variable add_result: unsigned(data_width downto 0);
     begin
-        lhs_unsigned := unsigned('0' & lhs);
-        carry := (0 => carry_in);
-
         carry_out <= '0';
 
         case opcode is
@@ -51,7 +39,9 @@ begin
                 result <= not lhs;
 
             when ALU_OP_ADD =>
-                arithmetic_result(lhs_unsigned + unsigned('0' & rhs) + carry);
+                add_result := unsigned('0' & lhs) + unsigned('0' & rhs) + ("" & carry_in);
+                result <= std_ulogic_vector(add_result((data_width - 1) downto 0));
+                carry_out <= add_result(data_width);
 
             when ALU_OP_LSHIFT =>
                 carry_out <= lhs(data_width - 1);
