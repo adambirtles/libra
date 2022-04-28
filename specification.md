@@ -6,18 +6,19 @@
 
 ### ALU
 
-Libra's arithmetic and logic unit (ALU) supports eight operations. Four operations are binary:
+Libra's arithmetic and logic unit (ALU) supports seven operations. Operations can be categorised in two ways: binary/unary and arithmetic/logical.
 
-- Addition
-- Bitwise AND
-- Bitwise OR
-- Bitwise XOR
+- Binary: uses both left-hand side and right-hand side inputs.
+- Unary: uses only the left-hand side input.
+- Arithmetic: uses/produces a carry in/out.
+- Logical: does not use/produce a carry in/out.
 
-The other four are unary:
+The operations are as follows:
 
-- Bitwise NOT
-- Left bit shift
-- Right bit shift
+|        | Arithmetic              | Logical      |
+|--------|-------------------------|--------------|
+| Binary | Addition                | AND, OR, XOR |
+| Unary  | Shift left, Shift right | NOT          |
 
 ### Status flags
 
@@ -25,7 +26,7 @@ There are three status flags: halt, carry, and zero.
 
 While the halt flag (`h`) is set, the CPU will not operate.
 
-The carry flag (`c`) stores the carry of the most recent addition/increment.
+The carry flag (`c`) stores the carry of the most recent arithmetic operation.
 
 The zero flag (`z`) is set if the result of the most recent ALU operation is 0.
 
@@ -74,7 +75,7 @@ Instructions are 16 bits. The 5 most significant bits are the opcode while the o
     <th>0</th>
   </tr>
   <tr>
-    <td>No operand</td>
+    <td>Implicit</td>
     <td colspan="5">Opcode (5)</td>
     <td colspan="11">N/A</td>
   </tr>
@@ -92,9 +93,9 @@ Instructions are 16 bits. The 5 most significant bits are the opcode while the o
     <td colspan="7">Index operand (7)</td>
   </tr>
   <tr>
-    <td>Immediate</td>
+    <td>Direct</td>
     <td colspan="5">Opcode (5)</td>
-    <td colspan="11">Immediate operand (11)</td>
+    <td colspan="11">Direct operand (11)</td>
   </tr>
 </table>
 
@@ -104,17 +105,17 @@ The instructions are as follows:
 
 | Name                 | Opcode | Layout     | Description                   |
 |:---------------------|:------:|:-----------|:------------------------------|
-| No-op                | 00000  | No operand | Do nothing                    |
-| Halt                 | 00001  | No operand | Set `h`                       |
+| No-op                | 00000  | Implicit   | Do nothing                    |
+| Halt                 | 00001  | Implicit   | Set `h`                       |
 | Copy                 | 00010  | Register   | `RX ← RY`                     |
 | Load                 | 00011  | Load/Store | `RX ← M[PG . IR[7:0]]`        |
 | Store                | 00100  | Load/Store | `M[PG . IR[7:0]] ← RX`        |
-| Set page register    | 00101  | Immediate  | `PG ← IR[4:0]`                |
-| Jump                 | 00110  | Immediate  | `PC[12:1] ← IR[11:0]`         |
-| Jump if zero         | 01000  | Immediate  | Jump if `z` is set            |
-| Jump if carry        | 01001  | Immediate  | Jump if `c` is set            |
-| Jump if not zero     | 01010  | Immediate  | Jump if `z` is not set        |
-| Jump if not carry    | 01011  | Immediate  | Jump if `c` is not set        |
+| Set page register    | 00101  | Direct     | `PG ← IR[4:0]`                |
+| Jump                 | 00110  | Direct     | `PC[12:1] ← IR[11:0]`         |
+| Jump if zero         | 01000  | Direct     | Jump if `z` is set            |
+| Jump if carry        | 01001  | Direct     | Jump if `c` is set            |
+| Jump if not zero     | 01010  | Direct     | Jump if `z` is not set        |
+| Jump if not carry    | 01011  | Direct     | Jump if `c` is not set        |
 | Add                  | 10100  | Register   | Clear `c` then `RX ← RX + RY` |
 | Left shift           | 10110  | Register   | Clear `c` then `RX ← RX << 1` |
 | Right shift          | 10111  | Register   | Clear `c` then `RX ← RX >> 1` |
