@@ -2,26 +2,12 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library libra;
+use work.testing.all;
 
 entity multiplication_tb is
 end entity;
 
 architecture sim of multiplication_tb is
-    constant FREQUENCY: integer := 100e6; -- 100 MHz
-    constant PERIOD: time := 1 sec / FREQUENCY;
-
-    signal clock: std_logic := '0';
-    signal n_reset: std_ulogic;
-
-    type data_vector is array (integer range <>) of std_ulogic_vector(7 downto 0);
-    signal memory: data_vector(0 to 4095);
-
-    function loc(page: integer; index: integer) return integer is
-    begin
-        return (128 * page) + index;
-    end function;
-
     constant A: std_ulogic_vector(7 downto 0) := x"34";     -- A = 52
     constant B: std_ulogic_vector(7 downto 0) := x"6e";     -- B = 110
     constant P: std_ulogic_vector(15 downto 0) := x"1658";  -- P = A * B = 5720
@@ -55,142 +41,66 @@ architecture sim of multiplication_tb is
         3 => x"00"
     );
 
-    signal mem_read: std_ulogic_vector(7 downto 0);
-    signal mem_write: std_ulogic_vector(7 downto 0);
-    signal mem_addr: unsigned(11 downto 0);
-    signal mem_write_enable: std_ulogic;
+    signal image: mem;
+    signal start: boolean := false;
 
-    type cpu_type is (PARALLEL, SERIAL);
-    signal cpu_select: cpu_type;
+    signal state_classical: test_state;
+    signal memory_classical: mem;
 
-    signal parallel_n_reset: std_ulogic;
-    signal parallel_mem_write: std_ulogic_vector(7 downto 0);
-    signal parallel_mem_addr: unsigned(11 downto 0);
-    signal parallel_mem_write_enable: std_ulogic;
-    signal parallel_halted: std_ulogic;
-    signal parallel_errored: std_ulogic;
-
-    signal serial_n_reset: std_ulogic;
-    signal serial_mem_write: std_ulogic_vector(7 downto 0);
-    signal serial_mem_addr: unsigned(11 downto 0);
-    signal serial_mem_write_enable: std_ulogic;
-    signal serial_halted: std_ulogic;
-    signal serial_errored: std_ulogic;
+    signal state_bit_serial: test_state;
+    signal memory_bit_serial: mem;
 begin
-    -- Memory
-    mem_read <= memory(to_integer(mem_addr));
+    harness_classical: entity work.test_harness
+        generic map(cpu => CLASSICAL)
+        port map(
+            start => start,
+            image => image,
+            state => state_classical,
+            memory => memory_classical
+        );
 
-    process(clock, n_reset)
+    harness_bit_serial: entity work.test_harness
+        generic map(cpu => BIT_SERIAL)
+        port map(
+            start => start,
+            image => image,
+            state => state_bit_serial,
+            memory => memory_bit_serial
+        );
+
+    init: process is
     begin
-        if n_reset = '0' then
-            -- Reprogram memory on reset
-            memory <= (others => x"00");
-            memory(loc(0, 0) to loc(0, PROGRAM'length - 1)) <= PROGRAM;
-            memory(loc(1, 0) to loc(1, DATA'length - 1)) <= DATA;
-        elsif rising_edge(clock) and mem_write_enable = '1' then
-            memory(to_integer(mem_addr)) <= mem_write;
+        image(loc(0, 0) to loc(0, PROGRAM'length - 1)) <= PROGRAM;
+        image(loc(1, 0) to loc(1, DATA'length - 1)) <= DATA;
+        start <= true;
+        wait;
+    end process;
+
+    classical: process is
+        variable result: std_ulogic_vector(15 downto 0);
+    begin
+        wait until state_classical = STATE_HALTED;
+
+        result := memory_classical(loc(1, 2)) & memory_classical(loc(1, 3));
+        if result = P then
+            report "classical: Passed";
+        else
+            report "classical: Failed! Expected " & value(P) & ", got " & value(result) severity error;
         end if;
+        wait;
     end process;
 
-    -- CPUs
-    cpu_parallel: entity libra.cpu(rtl)
-        generic map(bit_serial => false)
-        port map(
-            clock => clock,
-            n_reset => parallel_n_reset,
-            mem_read => mem_read,
-            mem_write => parallel_mem_write,
-            mem_addr => parallel_mem_addr,
-            mem_write_enable => parallel_mem_write_enable,
-            halted => parallel_halted,
-            errored => parallel_errored
-        );
-
-    cpu_serial: entity libra.cpu(rtl)
-        generic map(bit_serial => true)
-        port map(
-            clock => clock,
-            n_reset => serial_n_reset,
-            mem_read => mem_read,
-            mem_write => serial_mem_write,
-            mem_addr => serial_mem_addr,
-            mem_write_enable => serial_mem_write_enable,
-            halted => serial_halted,
-            errored => serial_errored
-        );
-
-    -- CPU selection logic
-    process(cpu_select, n_reset) is
+    bit_serial: process is
+        variable result: std_ulogic_vector(15 downto 0);
     begin
-        parallel_n_reset <= '0';
-        serial_n_reset <= '0';
+        wait until state_bit_serial = STATE_HALTED;
 
-        case cpu_select is
-            when PARALLEL =>
-                parallel_n_reset <= n_reset;
-            when SERIAL =>
-                serial_n_reset <= n_reset;
-        end case;
-    end process;
-
-    with cpu_select
-    select mem_write <=
-        parallel_mem_write when PARALLEL,
-        serial_mem_write   when SERIAL;
-
-    with cpu_select
-    select mem_addr <=
-        parallel_mem_addr when PARALLEL,
-        serial_mem_addr   when SERIAL;
-
-    with cpu_select
-    select mem_write_enable <=
-        parallel_mem_write_enable when PARALLEL,
-        serial_mem_write_enable   when SERIAL;
-
-    clock_process: clock <= not clock after PERIOD / 2;
-
-    test_process: process is
-        function msg(cpu: cpu_type; message: string) return string is
-        begin
-            return cpu_type'image(cpu) & ": " & message;
-        end function;
-
-        function value(n: std_ulogic_vector(15 downto 0)) return string is
-        begin
-            return integer'image(to_integer(unsigned(n)));
-        end function;
-
-        procedure test_cpu(
-            constant cpu: in cpu_type;
-            signal halted: in std_ulogic;
-            signal errored: in std_ulogic
-        ) is
-            variable result: std_ulogic_vector(15 downto 0);
-        begin
-            -- Reset system and switch to selected CPU
-            n_reset <= '0';
-            cpu_select <= cpu;
-            wait for PERIOD;
-
-            -- Bring system out of reset and run until CPU halts (or errors)
-            n_reset <= '1';
-            report msg(cpu, "Started");
-            wait until halted = '1' or errored = '1';
-
-            -- Check the results
-            assert errored = '0' report msg(cpu, "CPU error!") severity failure;
-
-            result := memory(loc(1, 2)) & memory(loc(1, 3));
-            if result = P then
-                report msg(cpu, "Passed");
-            else
-                report msg(cpu, "Failed! Expected " & value(P) & ", got " & value(result)) severity error;
-            end if;
-        end procedure;
-    begin
-        test_cpu(PARALLEL, parallel_halted, parallel_errored);
-        test_cpu(SERIAL, serial_halted, serial_errored);
+        result := memory_bit_serial(loc(1, 2)) & memory_bit_serial(loc(1, 3));
+        if result = P then
+            report "bit_serial: Passed";
+        else
+            report "bit_serial: Failed! Expected " & value(P) & ", got " & value(result) severity error;
+        end if;
         wait;
     end process;
 end architecture;

@@ -153,7 +153,7 @@ begin
     operand_index <= ir_out(6 downto 0);
     operand_immediate <= ir_out(10 downto 0);
 
-    gen_serial: if bit_serial generate
+    gen_bit_serial: if bit_serial generate
         signal ld_out: std_ulogic;
         signal rx_in: std_ulogic;
         signal alu_result: std_ulogic;
@@ -454,7 +454,7 @@ begin
         end process;
     end generate;
 
-    gen_parallel: if not bit_serial generate
+    gen_classical: if not bit_serial generate
         signal rx_in: std_ulogic_vector(7 downto 0);
         signal rx_out: std_ulogic_vector(7 downto 0);
         signal ry_out: std_ulogic_vector(7 downto 0);
