@@ -21,6 +21,9 @@ entity cpu is
 end entity;
 
 architecture rtl of cpu is
+    signal control_clock: std_ulogic;
+    signal action_clock: std_ulogic;
+
     signal halt: std_ulogic;
     signal carry: std_ulogic;
     signal zero: std_ulogic;
@@ -65,11 +68,23 @@ architecture rtl of cpu is
     constant TEST_SELECT_ZERO: std_ulogic := '0';
     constant TEST_SELECT_CARRY: std_ulogic := '1';
 begin
+    -- Clocking
+    divide_clock: process(clock, n_reset) is
+    begin
+        if n_reset = '0' then
+            control_clock <= '1';
+            action_clock <= '0';
+        elsif rising_edge(clock) then
+            control_clock <= not control_clock;
+            action_clock <= not action_clock;
+        end if;
+    end process;
+
     -- IR is implemented as two 8-bit registers
     reg_irh: entity work.parallel_register(rtl)
         generic map(data_width => 8)
         port map(
-            clock => clock,
+            clock => action_clock,
             n_reset => n_reset,
             write_enable => irh_write_enable,
             data_in => mem_read,
@@ -78,7 +93,7 @@ begin
     reg_irl: entity work.parallel_register(rtl)
         generic map(data_width => 8)
         port map(
-            clock => clock,
+            clock => action_clock,
             n_reset => n_reset,
             write_enable => irl_write_enable,
             data_in => mem_read,
@@ -88,7 +103,7 @@ begin
     reg_pg: entity work.parallel_register(rtl)
         generic map(data_width => 5)
         port map(
-            clock => clock,
+            clock => action_clock,
             n_reset => n_reset,
             write_enable => pg_write_enable,
             data_in => operand_immediate(4 downto 0),
@@ -98,7 +113,7 @@ begin
     reg_pc: entity work.parallel_register(rtl)
         generic map(data_width => 12)
         port map(
-            clock => clock,
+            clock => action_clock,
             n_reset => n_reset,
             write_enable => pc_write_enable,
             data_in => std_ulogic_vector(pc_in),
@@ -114,7 +129,7 @@ begin
 
     carry_flag: entity work.flag(rtl)
         port map(
-            clock => clock,
+            clock => action_clock,
             n_reset => n_reset,
             write_enable => c_write_enable,
             data_in => c_in,
@@ -122,7 +137,7 @@ begin
         );
     zero_flag: entity work.flag(rtl)
         port map(
-            clock => clock,
+            clock => action_clock,
             n_reset => n_reset,
             write_enable => z_write_enable,
             data_in => z_in,
@@ -216,7 +231,7 @@ begin
         reg_ld: entity work.piso_register(rtl)
             generic map(data_width => 8)
             port map(
-                clock => clock,
+                clock => action_clock,
                 n_reset => n_reset,
                 write_enable => ld_write_enable,
                 shift_enable => ld_shift_enable,
@@ -228,7 +243,7 @@ begin
         regfile: entity work.shift_register_file(rtl)
             generic map(data_width => 8)
             port map(
-                clock => clock,
+                clock => action_clock,
                 n_reset => n_reset,
                 shift_enable => regfile_shift_enable,
                 x_select => operand_rx,
@@ -269,7 +284,7 @@ begin
 
         mem_write <= rx_out;
 
-        process(clock, n_reset) is
+        process(control_clock, n_reset) is
             procedure init_step(constant value: steps := 7) is
             begin
                 step_count <= value;
@@ -306,7 +321,7 @@ begin
                 halt <= '0';
                 halted <= '0';
                 errored <= '0';
-            elsif falling_edge(clock) then
+            elsif rising_edge(control_clock) then
                 case state is
                     when FETCH_HIGH =>
                         irh_write_enable <= '1';
@@ -499,7 +514,7 @@ begin
         regfile: entity work.parallel_register_file(rtl)
             generic map(data_width => 8)
             port map(
-                clock => clock,
+                clock => action_clock,
                 n_reset => n_reset,
                 x_select => operand_rx,
                 x_write_enable => rx_write_enable,
@@ -535,7 +550,7 @@ begin
 
         mem_write <= rx_out;
 
-        process(clock, n_reset)
+        process(control_clock, n_reset)
         begin
             mem_write_enable <= '0';
             pc_write_enable <= '0';
@@ -556,7 +571,7 @@ begin
                 halt <= '0';
                 halted <= '0';
                 errored <= '0';
-            elsif falling_edge(clock) then
+            elsif rising_edge(control_clock) then
                 case state is
                     when FETCH_HIGH =>
                         irh_write_enable <= '1';
