@@ -70,6 +70,7 @@ begin
 
     init: process is
     begin
+        image <= (others => x"00");
         image(loc(0, 0) to loc(0, PROGRAM'length - 1)) <= PROGRAM;
         image(loc(1, 0) to loc(1, DATA'length - 1)) <= DATA;
         start <= true;

@@ -23,7 +23,7 @@ architecture sim of test_harness is
     constant FREQUENCY: integer := 100e6; -- 100 MHz
     constant PERIOD: time := 1 sec / FREQUENCY;
 
-    signal clock: std_logic := '0';
+    signal clock: std_logic := '1';
     signal n_reset: std_ulogic := '0';
     signal mem_write: std_ulogic_vector(7 downto 0);
     signal mem_read: std_ulogic_vector(7 downto 0);
