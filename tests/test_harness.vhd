@@ -19,9 +19,7 @@ end entity;
 
 architecture sim of test_harness is
     constant IS_BIT_SERIAL: boolean := cpu = BIT_SERIAL;
-
-    constant FREQUENCY: integer := 100e6; -- 100 MHz
-    constant PERIOD: time := 1 sec / FREQUENCY;
+    constant PERIOD: time := cpu_min_period(cpu);
 
     signal clock: std_logic := '1';
     signal n_reset: std_ulogic := '0';
@@ -68,11 +66,11 @@ begin
 
         n_reset <= '1';
         state <= STATE_RUNNING;
-        report cpu_type'image(cpu) & ": Started";
+        report cpu_msg(cpu, "Started");
         wait until halted = '1' or errored = '1';
 
         if errored = '1' then
-            report cpu_type'image(cpu) & ": CPU error!" severity failure;
+            report cpu_msg(cpu, "CPU error!") severity failure;
             state <= STATE_ERRORED;
         else
             state <= STATE_HALTED;

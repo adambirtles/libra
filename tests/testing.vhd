@@ -7,11 +7,13 @@ package testing is
     subtype mem is data_vector(0 to 4095);
 
     type cpu_type is (BIT_SERIAL, CLASSICAL);
-
     type test_state is (STATE_RUNNING, STATE_HALTED, STATE_ERRORED);
 
-    function value(n: std_ulogic_vector) return string;
     function loc(page: integer; index: integer) return integer;
+    function value(n: std_ulogic_vector) return string;
+
+    function cpu_msg(cpu: cpu_type; message: string) return string;
+    function cpu_min_period(cpu: cpu_type) return time;
 end package;
 
 package body testing is
@@ -25,8 +27,16 @@ package body testing is
         return integer'image(to_integer(unsigned(n)));
     end function;
 
-    function msg(cpu: cpu_type; message: string) return string is
+    function cpu_msg(cpu: cpu_type; message: string) return string is
     begin
         return cpu_type'image(cpu) & ": " & message;
+    end function;
+
+    function cpu_min_period(cpu: cpu_type) return time is
+    begin
+        case cpu is
+            when BIT_SERIAL => return 4.548 ns;
+            when CLASSICAL => return 4.254 ns;
+        end case;
     end function;
 end package body;

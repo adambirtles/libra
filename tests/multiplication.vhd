@@ -49,6 +49,17 @@ architecture sim of multiplication_tb is
 
     signal state_bit_serial: test_state;
     signal memory_bit_serial: mem;
+
+    procedure check_result(constant cpu: in cpu_type; signal memory: in mem) is
+        variable result: std_ulogic_vector(15 downto 0);
+    begin
+        result := memory(loc(1, 2)) & memory(loc(1, 3));
+        if result = P then
+            report cpu_msg(cpu, "Passed");
+        else
+            report cpu_msg(cpu, "Failed! Expected " & value(P) & ", got " & value(result)) severity error;
+        end if;
+    end procedure;
 begin
     harness_classical: entity work.test_harness
         generic map(cpu => CLASSICAL)
@@ -77,31 +88,17 @@ begin
         wait;
     end process;
 
-    classical: process is
-        variable result: std_ulogic_vector(15 downto 0);
+    test_classical: process is
     begin
         wait until state_classical = STATE_HALTED;
-
-        result := memory_classical(loc(1, 2)) & memory_classical(loc(1, 3));
-        if result = P then
-            report "classical: Passed";
-        else
-            report "classical: Failed! Expected " & value(P) & ", got " & value(result) severity error;
-        end if;
+        check_result(CLASSICAL, memory_classical);
         wait;
     end process;
 
-    bit_serial: process is
-        variable result: std_ulogic_vector(15 downto 0);
+    test_bit_serial: process is
     begin
         wait until state_bit_serial = STATE_HALTED;
-
-        result := memory_bit_serial(loc(1, 2)) & memory_bit_serial(loc(1, 3));
-        if result = P then
-            report "bit_serial: Passed";
-        else
-            report "bit_serial: Failed! Expected " & value(P) & ", got " & value(result) severity error;
-        end if;
+        check_result(BIT_SERIAL, memory_bit_serial);
         wait;
     end process;
 end architecture;

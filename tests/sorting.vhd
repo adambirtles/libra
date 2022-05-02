@@ -74,11 +74,18 @@ architecture sim of sorting_tb is
 
     signal state_classical: test_state;
     signal memory_classical: mem;
-    shared variable result_classical: data_vector(0 to 11);
 
     signal state_bit_serial: test_state;
     signal memory_bit_serial: mem;
-    shared variable result_bit_serial: data_vector(0 to 11);
+
+    procedure check_result(constant cpu: in cpu_type; signal memory: in mem) is
+    begin
+        if memory(loc(2, 0) to loc(2, COUNT - 1)) = ARRAY_SORTED then
+            report cpu_msg(cpu, "Passed");
+        else
+            report cpu_msg(cpu, "Failed!") severity error;
+        end if;
+    end procedure;
 begin
     harness_classical: entity work.test_harness
         generic map(cpu => CLASSICAL)
@@ -108,29 +115,17 @@ begin
         wait;
     end process;
 
-    classical: process is
+    test_classical: process is
     begin
         wait until state_classical = STATE_HALTED;
-
-        result_classical := memory_classical(loc(2, 0) to loc(2, COUNT - 1));
-        if result_classical = ARRAY_SORTED then
-            report "classical: Passed";
-        else
-            report "classical: Failed!" severity error;
-        end if;
+        check_result(CLASSICAL, memory_classical);
         wait;
     end process;
 
-    bit_serial: process is
+    test_bit_serial: process is
     begin
         wait until state_bit_serial = STATE_HALTED;
-
-        result_bit_serial := memory_bit_serial(loc(2, 0) to loc(2, COUNT - 1));
-        if result_bit_serial = ARRAY_SORTED then
-            report "bit_serial: Passed";
-        else
-            report "bit_serial: Failed!" severity error;
-        end if;
+        check_result(BIT_SERIAL, memory_bit_serial);
         wait;
     end process;
 end architecture;
