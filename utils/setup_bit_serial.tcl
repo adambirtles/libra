@@ -1,0 +1,1 @@
+set_property generic bit_serial=true [current_fileset]
