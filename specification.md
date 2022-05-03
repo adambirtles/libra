@@ -2,7 +2,7 @@
 
 ## Components
 
-![Block diagram of a Libra implementation](block-diagram-parallel.png)
+![Block diagram of Libra's classical implementation](block-diagram-classical.png)
 
 ### ALU
 
@@ -117,12 +117,12 @@ The instructions are as follows:
 | Jump if not zero     | 01010  | Direct     | Jump if `z` is not set        |
 | Jump if not carry    | 01011  | Direct     | Jump if `c` is not set        |
 | Add                  | 10100  | Register   | Clear `c` then `RX ← RX + RY` |
-| Left shift           | 10110  | Register   | Clear `c` then `RX ← RX << 1` |
-| Right shift          | 10111  | Register   | Clear `c` then `RX ← RX >> 1` |
+| Left-shift           | 10110  | Register   | Clear `c` then `RX ← RX << 1` |
+| Right-shift          | 10111  | Register   | Clear `c` then `RX ← RX >> 1` |
 | Bitwise AND          | 11000  | Register   | `RX ← RX & RY`                |
 | Bitwise OR           | 11001  | Register   | `RX ← RX \| RY`               |
 | Bitwise XOR          | 11010  | Register   | `RX ← RX ^ RY`                |
 | Bitwise NOT          | 11011  | Register   | `RX ← ~RX`                    |
 | Add w/ carry         | 11100  | Register   | `RX ← RX + RY`                |
-| Left shift w/ carry  | 11110  | Register   | `RX ← RX << 1`                |
-| Right shift w/ carry | 11111  | Register   | `RX ← RX >> 1`                |
+| Left-shift w/ carry  | 11110  | Register   | `RX ← RX << 1`                |
+| Right-shift w/ carry | 11111  | Register   | `RX ← RX >> 1`                |
