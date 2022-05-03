@@ -4,8 +4,8 @@ Libra is a simple 8-bit CPU architecture designed for my BSc dissertation. This 
 
 ## Known issues
 
-### Bit-serial shifting
+### Bit-serial right-shift
 
-The shift instructions do not correctly set the zero flag in the bit-serial implementation. A workaround for this problem is to OR the result with 0 to set the flag correctly.
+The right-shift instructions do not correctly set the zero flag in the bit-serial implementation. A workaround for this problem is to OR the result with 0 to set the flag correctly.
 
 [spec]: specification.md

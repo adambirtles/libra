@@ -65,6 +65,9 @@ architecture rtl of cpu is
     type pc_in_selector is (PC_IN_SELECT_INCREMENT, PC_IN_SELECT_OPERAND);
     signal pc_in_select: pc_in_selector;
 
+    type c_in_selector is (C_IN_SELECT_CLEAR, C_IN_SELECT_ALU);
+    signal c_in_select: c_in_selector;
+
     constant TEST_SELECT_ZERO: std_ulogic := '0';
     constant TEST_SELECT_CARRY: std_ulogic := '1';
 begin
@@ -154,6 +157,11 @@ begin
         pc_increment                      when PC_IN_SELECT_INCREMENT,
         unsigned(operand_immediate & '0') when PC_IN_SELECT_OPERAND;
 
+    mux_c_in: with c_in_select
+    select c_in <=
+        '0'           when C_IN_SELECT_CLEAR,
+        alu_carry     when C_IN_SELECT_ALU;
+
     mux_test: with opcode(0)
     select selected_test <=
         zero  when TEST_SELECT_ZERO,
@@ -183,13 +191,9 @@ begin
         type rx_in_selector is (
             RX_IN_SELECT_LOAD,
             RX_IN_SELECT_RY,
-            RX_IN_SELECT_ALU,
-            RX_IN_SELECT_CARRY
+            RX_IN_SELECT_ALU
         );
         signal rx_in_select: rx_in_selector;
-
-        type c_in_selector is (C_IN_SELECT_CLEAR, C_IN_SELECT_ALU, C_IN_SELECT_RX);
-        signal c_in_select: c_in_selector;
 
         type z_in_selector is (Z_IN_SELECT_SET, Z_IN_SELECT_RESULT);
         signal z_in_select: z_in_selector;
@@ -217,7 +221,6 @@ begin
             EXECUTE_CLEAR_CARRY,
             EXECUTE_SET_ZERO,
             EXECUTE_ALU_OP,
-            EXECUTE_SHIFT,
             EXECUTE_END,
 
             -- Error
@@ -268,14 +271,7 @@ begin
         select rx_in <=
             ld_out     when RX_IN_SELECT_LOAD,
             ry_out(0)  when RX_IN_SELECT_RY,
-            alu_result when RX_IN_SELECT_ALU,
-            carry      when RX_IN_SELECT_CARRY;
-
-        mux_c_in: with c_in_select
-        select c_in <=
-            '0'           when C_IN_SELECT_CLEAR,
-            alu_carry     when C_IN_SELECT_ALU,
-            rx_out(0)     when C_IN_SELECT_RX;
+            alu_result when RX_IN_SELECT_ALU;
 
         mux_z_in: with z_in_select
         select z_in <=
@@ -425,31 +421,18 @@ begin
                         z_write_enable <= '1';
                         z_in_select <= Z_IN_SELECT_SET;
                         case opcode is
-                        when OP_RSHIFT | OP_RSHIFT_C =>
-                            init_step(0);
-                            state <= EXECUTE_SHIFT;
-                        when OP_LSHIFT | OP_LSHIFT_C =>
-                            init_step;
-                            state <= EXECUTE_SHIFT;
-                        when others =>
-                            init_step;
-                            state <= EXECUTE_ALU_OP;
+                            when OP_RSHIFT | OP_RSHIFT_C =>
+                                init_step(0);
+                            when others =>
+                                init_step;
                         end case;
+                        state <= EXECUTE_ALU_OP;
 
                     when EXECUTE_ALU_OP =>
                         c_write_enable <= '1';
                         z_write_enable <= '1';
                         rx_in_select <= RX_IN_SELECT_ALU;
                         c_in_select <= C_IN_SELECT_ALU;
-                        regfile_shift_enable <= '1';
-                        z_in_select <= Z_IN_SELECT_RESULT;
-                        next_step;
-
-                    when EXECUTE_SHIFT =>
-                        c_write_enable <= '1';
-                        z_write_enable <= '1';
-                        rx_in_select <= RX_IN_SELECT_CARRY;
-                        c_in_select <= C_IN_SELECT_RX;
                         regfile_shift_enable <= '1';
                         z_in_select <= Z_IN_SELECT_RESULT;
                         next_step;
@@ -476,9 +459,6 @@ begin
         signal alu_result: std_ulogic_vector(7 downto 0);
 
         signal rx_write_enable: std_ulogic;
-
-        type c_in_selector is (C_IN_SELECT_CLEAR, C_IN_SELECT_ALU);
-        signal c_in_select: c_in_selector;
 
         type rx_in_selector is (RX_IN_SELECT_LOAD, RX_IN_SELECT_RY, RX_IN_SELECT_ALU);
         signal rx_in_select: rx_in_selector;
@@ -540,11 +520,6 @@ begin
             mem_read        when RX_IN_SELECT_LOAD,
             ry_out          when RX_IN_SELECT_RY,
             alu_result      when RX_IN_SELECT_ALU;
-
-        mux_c_in: with c_in_select
-        select c_in <=
-            '0'           when C_IN_SELECT_CLEAR,
-            alu_carry     when C_IN_SELECT_ALU;
 
         z_in <= '1' when alu_result = "00000000" else '0';
 

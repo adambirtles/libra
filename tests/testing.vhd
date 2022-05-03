@@ -35,7 +35,7 @@ package body testing is
     function cpu_min_period(cpu: cpu_type) return time is
     begin
         case cpu is
-            when BIT_SERIAL => return 4.548 ns;
+            when BIT_SERIAL => return 2.962 ns;
             when CLASSICAL => return 4.254 ns;
         end case;
     end function;
